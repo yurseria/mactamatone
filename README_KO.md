@@ -37,6 +37,8 @@ open dist/Mactamatone.app
 2. 오타마톤의 입과 음 이름 옆의 다섯 막대가 음 높이에 따라 변합니다. 입 아이콘은 화면의 입 움직임만 켜고 끕니다.
 3. 톱니바퀴로 설정 창을 열어 화면 각도 또는 수동 연주를 선택할 수 있습니다. **입 음색** 슬라이더는 소리의 배음을 조절합니다.
 
+설정의 **테마**에서 클래식, 핑크(벚꽃), 블랙(고양이), 옐로우(병아리), 갤럭시(우주), 시바견을 선택할 수 있습니다. 위젯과 설정 미리보기에 즉시 적용되며, 모든 테마에서 입 모양 5단계를 지원합니다. 선택한 테마는 다음 실행에도 유지됩니다. 설정 미리보기에는 테마별로 벚꽃, 달빛 라운지, 햇살과 꽃밭, 우주, 따뜻한 정원 배경을 표시합니다. 배경은 기존 악기 이미지 뒤에 별도 레이어로 배치합니다.
+
 오타마톤 그림을 드래그하면 위젯을 옮길 수 있습니다. 설정 창을 닫아도 위젯과 연주는 계속됩니다. X 버튼은 앱을 종료합니다. macOS 26 이상에서는 위젯에 Liquid Glass를 사용합니다.
 
 화면 각도 센서가 없으면 수동 연주로 전환됩니다. 수동 음 높이 슬라이더로 소리와 입 움직임을 시험할 수 있습니다. 화면 각도 모드에서는 화면이 거의 닫히면 소리가 멈춥니다.
@@ -45,7 +47,7 @@ open dist/Mactamatone.app
 
 화면 각도는 Apple의 `las` HID 장치에서 feature report 1을 별도 큐로 읽습니다. 소리는 `AVAudioEngine`으로 합성합니다. 이 센서는 공개 Core Motion API가 아니므로 맥 모델이나 macOS 버전에 따라 사용 가능 여부가 달라질 수 있습니다. 센서 접근 방식과 보고서 형식은 [macTilt의 LidSensor.swift](https://github.com/lqSky7/iphone-duo-macos-animation/blob/main/Sources/LidSensor.swift)를 참고했습니다.
 
-제공된 다섯 이미지는 `Sources/Mactamatone/Resources/OtamatoneLevel0.png`부터 `OtamatoneLevel4.png`까지 보관했습니다. 위젯은 배경을 제거한 `OtamatoneWidgetLevel0.png`부터 `OtamatoneWidgetLevel4.png`까지 사용합니다. 처음 제공된 화면 시안은 `design/Reference.png`에 있습니다.
+제공된 다섯 이미지는 `Sources/Mactamatone/Resources/OtamatoneLevel0.png`부터 `OtamatoneLevel4.png`까지 보관했습니다. 위젯은 배경을 제거한 `OtamatoneWidgetLevel0.png`부터 `OtamatoneWidgetLevel4.png`까지 사용합니다. 처음 제공된 화면 시안은 `design/Reference.png`에 있습니다. 추가 테마 이미지는 `OtamatonePinkLevel0.png`부터 `OtamatoneShibaLevel4.png`까지 보관합니다. 생성 원본과 프롬프트 기록은 `design/Themes/`에 있으며, `swift scripts/prepare-theme-art.swift`로 위젯 리소스를 재생성할 수 있습니다.
 
 ## 릴리스
 

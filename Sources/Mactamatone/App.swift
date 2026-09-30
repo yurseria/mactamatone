@@ -9,6 +9,10 @@ enum InputMode: String, CaseIterable, Identifiable {
 }
 
 final class InstrumentModel: ObservableObject {
+    @Published var theme: InstrumentTheme {
+        didSet { preferences.set(theme.rawValue, forKey: InstrumentTheme.preferenceKey) }
+    }
+    private let preferences: UserDefaults
     @Published var inputMode: InputMode = .lid { didSet { updatePitchLevel(); updateSound() } }
     @Published var lidAngle = 120.0 { didSet { updatePitchLevel(); updateSound() } }
     @Published var manualAngle = 100.0 { didSet { updatePitchLevel(); updateSound() } }
@@ -24,7 +28,9 @@ final class InstrumentModel: ObservableObject {
     private let synth = OtamatoneSynth()
     private var hasStarted = false
 
-    init() {
+    init(preferences: UserDefaults = .standard) {
+        self.preferences = preferences
+        self.theme = InstrumentTheme.saved(in: preferences)
         sensor.onAngle = { [weak self] value in
             self?.lidAngle = value
         }
@@ -90,6 +96,7 @@ final class InstrumentModel: ObservableObject {
     }
 }
 
+#if !THEME_CHECKS
 @main
 struct MactamatoneApp {
     static func main() {
@@ -100,6 +107,8 @@ struct MactamatoneApp {
         app.run()
     }
 }
+
+#endif
 
 private final class MactamatoneDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     private let model = InstrumentModel()
@@ -142,18 +151,8 @@ private final class MactamatoneDelegate: NSObject, NSApplicationDelegate, NSWind
             NSApp.activate(ignoringOtherApps: true)
             return
         }
-        let window = NSWindow(
-            contentRect: NSRect(x: 0, y: 0, width: 962, height: 700),
-            styleMask: [.titled, .closable, .miniaturizable, .resizable],
-            backing: .buffered,
-            defer: false
-        )
-        window.isReleasedWhenClosed = false
-        window.title = "맥타마톤"
+        let window = SettingsWindow(model: model)
         window.center()
-        window.title = "맥타마톤 설정"
-        window.contentView = NSHostingView(rootView: SettingsView(model: model)
-            .frame(minWidth: 840, minHeight: 620))
         window.delegate = self
         window.makeKeyAndOrderFront(nil)
         NSApp.activate(ignoringOtherApps: true)
@@ -174,34 +173,36 @@ private final class MactamatoneDelegate: NSObject, NSApplicationDelegate, NSWind
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool { false }
 }
 
+/// Keep native window controls while letting the theme fill the titlebar area.
+final class SettingsWindow: NSWindow {
+    static let trafficLightInset: CGFloat = 32
+
+    init(model: InstrumentModel) {
+        super.init(
+            contentRect: NSRect(x: 0, y: 0, width: 962, height: 700),
+            styleMask: [.titled, .closable, .miniaturizable, .resizable, .fullSizeContentView],
+            backing: .buffered,
+            defer: false
+        )
+        isReleasedWhenClosed = false
+        title = "맥타마톤 설정"
+        titleVisibility = .hidden
+        titlebarAppearsTransparent = true
+        titlebarSeparatorStyle = .none
+        backgroundColor = NSColor(model.theme.backdrop)
+        contentView = NSHostingView(rootView: SettingsView(model: model)
+            .frame(minWidth: 840, minHeight: 620))
+    }
+}
+
 private enum Palette {
-    static let backdrop = Color(red: 0.80, green: 0.82, blue: 0.86)
     static let ink = Color(red: 0.09, green: 0.12, blue: 0.18)
     static let muted = Color(red: 0.35, green: 0.39, blue: 0.47)
     static let blue = Color(red: 0.32, green: 0.50, blue: 0.93)
     static let line = Color(red: 0.68, green: 0.72, blue: 0.79)
 }
 
-private enum Art {
-    static let levels = (0..<5).map { load("OtamatoneLevel\($0)") }
-    static let widgetCGImages: [CGImage] = (0..<5).map { level in
-        let image = load("OtamatoneWidgetLevel\(level)")
-        guard let cgImage = image.cgImage(forProposedRect: nil, context: nil, hints: nil) else {
-            preconditionFailure("Cannot decode widget image for level \(level)")
-        }
-        return cgImage
-    }
-
-    private static func load(_ name: String) -> NSImage {
-        guard let url = Bundle.module.url(forResource: name, withExtension: "png"),
-              let image = NSImage(contentsOf: url) else {
-            preconditionFailure("Missing bundled image: \(name)")
-        }
-        return image
-    }
-}
-
-private struct FloatingWidgetView: View {
+struct FloatingWidgetView: View {
     @ObservedObject var model: InstrumentModel
     let openSettings: () -> Void
     let quit: () -> Void
@@ -211,9 +212,9 @@ private struct FloatingWidgetView: View {
             widgetBackdrop
                 .offset(y: 42)
 
-            WidgetArtView(level: model.visualMouthLevel)
+            WidgetArtView(theme: model.theme, level: model.visualMouthLevel)
             .frame(width: 252, height: 372)
-            .accessibilityLabel("입 열림 \(model.visualMouthLevel + 1)단계")
+            .accessibilityLabel("\(model.theme.title), 입 열림 \(model.visualMouthLevel + 1)단계")
 
             VStack {
                 HStack {
@@ -239,7 +240,7 @@ private struct FloatingWidgetView: View {
                         HStack(alignment: .bottom, spacing: 2) {
                             ForEach(0..<5) { index in
                                 Capsule()
-                                    .fill(index <= model.pitchLevel ? Palette.blue : Palette.line)
+                                    .fill(index <= model.pitchLevel ? model.theme.accent : Palette.line)
                                     .frame(width: 4, height: CGFloat([10, 17, 13, 21, 15][index]))
                             }
                         }
@@ -269,7 +270,7 @@ private struct FloatingWidgetView: View {
                     .opacity(0.5)
             } else {
                 Circle()
-                    .fill(Palette.backdrop.opacity(0.44))
+                    .fill(model.theme.backdrop.opacity(0.44))
                     .frame(width: 302, height: 302)
             }
         }
@@ -314,21 +315,23 @@ private struct WidgetLiquidGlassCapsule: ViewModifier {
 }
 
 private struct WidgetArtView: NSViewRepresentable {
+    let theme: InstrumentTheme
     let level: Int
 
     func makeNSView(context: Context) -> ArtDragView {
         let view = ArtDragView()
-        view.setLevel(level)
+        view.setArt(theme: theme, level: level)
         return view
     }
 
     func updateNSView(_ nsView: ArtDragView, context: Context) {
-        nsView.setLevel(level)
+        nsView.setArt(theme: theme, level: level)
     }
 
     final class ArtDragView: NSView {
         private let artLayer = CALayer()
         private var currentLevel = -1
+        private var currentTheme: InstrumentTheme?
 
         override init(frame frameRect: NSRect) {
             super.init(frame: frameRect)
@@ -349,12 +352,13 @@ private struct WidgetArtView: NSViewRepresentable {
                                     width: 372, height: 372)
         }
 
-        func setLevel(_ level: Int) {
-            guard level != currentLevel else { return }
+        func setArt(theme: InstrumentTheme, level: Int) {
+            guard level != currentLevel || theme != currentTheme else { return }
             currentLevel = level
+            currentTheme = theme
             CATransaction.begin()
             CATransaction.setDisableActions(true)
-            artLayer.contents = Art.widgetCGImages[level]
+            artLayer.contents = Art.widgetCGImage(theme: theme, level: level)
             CATransaction.commit()
         }
 
@@ -380,118 +384,126 @@ struct SettingsView: View {
             stage
         }
         .padding(20)
-        .background(Palette.backdrop.ignoresSafeArea())
+        .padding(.top, SettingsWindow.trafficLightInset)
+        .background(model.theme.backdrop.ignoresSafeArea())
+        .ignoresSafeArea(.container, edges: .top)
         .foregroundStyle(Palette.ink)
     }
 
     private var controlPanel: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            Text("Otamatone")
-                .font(.system(size: 30, weight: .black, design: .rounded))
-                .tracking(-1.5)
-            Text("MAC INSTRUMENT")
-                .font(.system(size: 10, weight: .bold, design: .rounded))
-                .tracking(3)
-                .foregroundStyle(Palette.muted)
-                .padding(.top, 2)
-            Text("화면을 움직여 연주하세요")
-                .font(.system(size: 14, weight: .medium))
-                .foregroundStyle(Palette.muted)
-                .padding(.top, 17)
+        ScrollView(.vertical) {
+            VStack(alignment: .leading, spacing: 0) {
+                Text("Otamatone")
+                    .font(.system(size: 30, weight: .black, design: .rounded))
+                    .tracking(-1.5)
+                Text("MAC INSTRUMENT")
+                    .font(.system(size: 10, weight: .bold, design: .rounded))
+                    .tracking(3)
+                    .foregroundStyle(Palette.muted)
+                    .padding(.top, 2)
+                Text("화면을 움직여 연주하세요")
+                    .font(.system(size: 14, weight: .medium))
+                    .foregroundStyle(Palette.muted)
+                    .padding(.top, 17)
 
-            Spacer(minLength: 26)
+                themePicker
+                    .padding(.top, 22)
 
-            Button(action: model.togglePlay) {
-                HStack(spacing: 14) {
-                    Image(systemName: model.isPlaying ? "stop.fill" : "play.fill")
-                        .font(.system(size: 20, weight: .bold))
-                        .frame(width: 54, height: 54)
-                        .background(model.safeToPlay ? Palette.ink : Palette.line,
-                                    in: RoundedRectangle(cornerRadius: 17))
-                        .foregroundStyle(.white)
-                    VStack(alignment: .leading, spacing: 3) {
-                        Text(model.isPlaying ? "소리 멈추기" : "연주 시작")
-                            .font(.system(size: 16, weight: .bold, design: .rounded))
-                        Text(model.safeToPlay ? "화면을 천천히 움직여요" : "화면을 열어주세요")
-                            .font(.system(size: 11, weight: .medium))
+                Spacer(minLength: 16)
+
+                Button(action: model.togglePlay) {
+                    HStack(spacing: 14) {
+                        Image(systemName: model.isPlaying ? "stop.fill" : "play.fill")
+                            .font(.system(size: 20, weight: .bold))
+                            .frame(width: 54, height: 54)
+                            .background(model.safeToPlay ? Palette.ink : Palette.line,
+                                        in: RoundedRectangle(cornerRadius: 17))
+                            .foregroundStyle(.white)
+                        VStack(alignment: .leading, spacing: 3) {
+                            Text(model.isPlaying ? "소리 멈추기" : "연주 시작")
+                                .font(.system(size: 16, weight: .bold, design: .rounded))
+                            Text(model.safeToPlay ? "화면을 천천히 움직여요" : "화면을 열어주세요")
+                                .font(.system(size: 11, weight: .medium))
+                                .foregroundStyle(Palette.muted)
+                        }
+                        Spacer(minLength: 0)
+                    }
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .disabled(!model.safeToPlay && !model.isPlaying)
+                .accessibilityHint("소리를 켠 뒤 화면 각도를 움직이면 음높이가 바뀝니다")
+
+                Rectangle().fill(Palette.line.opacity(0.55)).frame(height: 1).padding(.vertical, 25)
+
+                Text("입력 방식")
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundStyle(Palette.muted)
+                HStack(spacing: 6) {
+                    ForEach(InputMode.allCases) { mode in
+                        Button { model.inputMode = mode } label: {
+                            Text(mode.rawValue)
+                                .font(.system(size: 12, weight: .semibold))
+                                .frame(maxWidth: .infinity)
+                                .padding(.vertical, 10)
+                                .foregroundStyle(model.inputMode == mode ? .white : Palette.ink)
+                                .background(model.inputMode == mode ? Palette.ink : .white.opacity(0.55),
+                                            in: RoundedRectangle(cornerRadius: 10))
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+                .padding(.top, 10)
+
+                if model.inputMode == .manual {
+                    VStack(alignment: .leading, spacing: 7) {
+                        Text("음높이")
+                            .font(.system(size: 12, weight: .semibold))
+                        ValueTrack(value: $model.manualAngle, range: 55...145, label: "음높이", accent: model.theme.accent)
+                    }
+                    .padding(.top, 22)
+                } else {
+                    Text(model.lidAngle < 25 && model.sensorConnected
+                         ? "화면을 조금 더 열면 연주할 수 있어요."
+                         : model.statusMessage)
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundStyle(Palette.muted)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .padding(.top, 18)
+                }
+
+                VStack(alignment: .leading, spacing: 7) {
+                    HStack {
+                        Text("입 음색")
+                            .font(.system(size: 12, weight: .semibold))
+                        Spacer()
+                        Text("\(Int(model.mouth * 100))%")
+                            .font(.system(size: 11, design: .monospaced))
                             .foregroundStyle(Palette.muted)
                     }
-                    Spacer(minLength: 0)
-                }
-                .contentShape(Rectangle())
-            }
-            .buttonStyle(.plain)
-            .disabled(!model.safeToPlay && !model.isPlaying)
-            .accessibilityHint("소리를 켠 뒤 화면 각도를 움직이면 음높이가 바뀝니다")
-
-            Rectangle().fill(Palette.line.opacity(0.55)).frame(height: 1).padding(.vertical, 25)
-
-            Text("입력 방식")
-                .font(.system(size: 12, weight: .semibold))
-                .foregroundStyle(Palette.muted)
-            HStack(spacing: 6) {
-                ForEach(InputMode.allCases) { mode in
-                    Button { model.inputMode = mode } label: {
-                        Text(mode.rawValue)
-                            .font(.system(size: 12, weight: .semibold))
-                            .frame(maxWidth: .infinity)
-                            .padding(.vertical, 10)
-                            .foregroundStyle(model.inputMode == mode ? .white : Palette.ink)
-                            .background(model.inputMode == mode ? Palette.ink : .white.opacity(0.55),
-                                        in: RoundedRectangle(cornerRadius: 10))
-                    }
-                    .buttonStyle(.plain)
-                }
-            }
-            .padding(.top, 10)
-
-            if model.inputMode == .manual {
-                VStack(alignment: .leading, spacing: 7) {
-                    Text("음높이")
-                        .font(.system(size: 12, weight: .semibold))
-                    ValueTrack(value: $model.manualAngle, range: 55...145, label: "음높이")
+                    ValueTrack(value: $model.mouth, range: 0.1...1, label: "입 음색", accent: model.theme.accent)
                 }
                 .padding(.top, 22)
-            } else {
-                Text(model.lidAngle < 25 && model.sensorConnected
-                     ? "화면을 조금 더 열면 연주할 수 있어요."
-                     : model.statusMessage)
-                    .font(.system(size: 12, weight: .medium))
-                    .foregroundStyle(Palette.muted)
-                    .fixedSize(horizontal: false, vertical: true)
-                    .padding(.top, 18)
-            }
 
-            VStack(alignment: .leading, spacing: 7) {
-                HStack {
-                    Text("입 음색")
-                        .font(.system(size: 12, weight: .semibold))
-                    Spacer()
-                    Text("\(Int(model.mouth * 100))%")
-                        .font(.system(size: 11, design: .monospaced))
+                Spacer(minLength: 28)
+
+                HStack(spacing: 7) {
+                    Circle()
+                        .fill(model.sensorConnected ? model.theme.accent : Palette.muted)
+                        .frame(width: 8, height: 8)
+                    Text(model.sensorConnected ? "센서 연결됨" : "수동 모드 사용 가능")
+                        .font(.system(size: 11, weight: .semibold))
                         .foregroundStyle(Palette.muted)
                 }
-                ValueTrack(value: $model.mouth, range: 0.1...1, label: "입 음색")
-            }
-            .padding(.top, 22)
-
-            Spacer(minLength: 28)
-
-            HStack(spacing: 7) {
-                Circle()
-                    .fill(model.sensorConnected ? Palette.blue : Palette.muted)
-                    .frame(width: 8, height: 8)
-                Text(model.sensorConnected ? "센서 연결됨" : "수동 모드 사용 가능")
-                    .font(.system(size: 11, weight: .semibold))
-                    .foregroundStyle(Palette.muted)
-            }
-            if let error = model.audioError {
-                Text(error)
-                    .font(.system(size: 11))
-                    .foregroundStyle(.red)
-                    .padding(.top, 8)
+                if let error = model.audioError {
+                    Text(error)
+                        .font(.system(size: 11))
+                        .foregroundStyle(.red)
+                        .padding(.top, 8)
+                }
             }
         }
+        .scrollIndicators(.hidden)
         .padding(23)
         .frame(maxHeight: .infinity, alignment: .topLeading)
         .background(.white.opacity(0.40), in: RoundedRectangle(cornerRadius: 26))
@@ -499,22 +511,73 @@ struct SettingsView: View {
             .stroke(.white.opacity(0.75), lineWidth: 1))
     }
 
+    private var themePicker: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Picker("테마", selection: $model.theme) {
+                ForEach(InstrumentTheme.allCases) { theme in
+                    Text(theme.title).tag(theme)
+                }
+            }
+            .font(.system(size: 12, weight: .semibold))
+            .pickerStyle(.menu)
+
+            HStack(spacing: 4) {
+                ForEach(InstrumentTheme.allCases) { theme in
+                    Button { model.theme = theme } label: {
+                        Image(nsImage: Art.previewImage(theme: theme))
+                            .resizable()
+                            .scaledToFit()
+                            .frame(width: 29, height: 48)
+                            .background(theme.backdrop.opacity(0.8), in: RoundedRectangle(cornerRadius: 9))
+                            .overlay(RoundedRectangle(cornerRadius: 9)
+                                .stroke(model.theme == theme ? theme.accent : .clear, lineWidth: 2))
+                    }
+                    .buttonStyle(.plain)
+                    .help(theme.title)
+                    .accessibilityLabel(theme.title)
+                    .accessibilityAddTraits(model.theme == theme ? [.isSelected] : [])
+                }
+            }
+        }
+    }
+
     private var stage: some View {
         GeometryReader { geometry in
             ZStack(alignment: .topLeading) {
+                model.theme.backdrop
+                if let background = Art.backgroundImage(theme: model.theme) {
+                    Image(nsImage: background)
+                        .resizable()
+                        .interpolation(.high)
+                        .aspectRatio(contentMode: .fill)
+                        .frame(width: geometry.size.width, height: geometry.size.height)
+                        .saturation(0.65)
+                        .opacity(model.theme.backgroundOpacity)
+                        .accessibilityHidden(true)
+                        .allowsHitTesting(false)
+                    let artSide = min(geometry.size.width, geometry.size.height)
+                    Ellipse()
+                        .fill(.black.opacity(0.08))
+                        .frame(width: artSide * 0.28, height: artSide * 0.022)
+                        .blur(radius: 8)
+                        .position(x: geometry.size.width / 2 - artSide * 0.015,
+                                  y: (geometry.size.height - artSide) / 2 + artSide * 0.958)
+                        .accessibilityHidden(true)
+                        .allowsHitTesting(false)
+                }
                 ForEach(0..<5) { level in
-                    Image(nsImage: Art.levels[level])
+                    Image(nsImage: Art.stageImage(theme: model.theme, level: level))
                         .resizable()
                         .interpolation(.high)
                         .aspectRatio(contentMode: .fill)
                         .frame(width: geometry.size.width, height: geometry.size.height)
                         .blur(radius: 16)
-                        .opacity(model.visualMouthLevel == level ? 1 : 0)
+                        .opacity(model.theme == .classic && model.visualMouthLevel == level ? 1 : 0)
                         .accessibilityHidden(true)
                 }
                 .animation(.easeInOut(duration: 0.14), value: model.visualMouthLevel)
                 ForEach(0..<5) { level in
-                    Image(nsImage: Art.levels[level])
+                    Image(nsImage: Art.stageImage(theme: model.theme, level: level))
                         .resizable()
                         .interpolation(.high)
                         .aspectRatio(contentMode: .fit)
@@ -550,7 +613,7 @@ struct SettingsView: View {
                 if model.isPlaying && model.safeToPlay {
                     Image(systemName: "music.note")
                         .font(.system(size: 28, weight: .medium))
-                        .foregroundStyle(Palette.blue.opacity(0.9))
+                        .foregroundStyle(model.theme.accent.opacity(0.9))
                         .position(x: geometry.size.width * 0.22, y: geometry.size.height * 0.53)
                         .accessibilityHidden(true)
                 }
@@ -571,7 +634,7 @@ struct SettingsView: View {
             HStack(alignment: .bottom, spacing: 4) {
                 ForEach(0..<5) { index in
                     Capsule()
-                        .fill(index <= model.pitchLevel ? Palette.blue : .white.opacity(0.75))
+                        .fill(index <= model.pitchLevel ? model.theme.accent : .white.opacity(0.75))
                         .frame(width: 6, height: CGFloat([19, 31, 24, 37, 29][index]))
                 }
             }
@@ -596,6 +659,7 @@ private struct ValueTrack: View {
     @Binding var value: Double
     let range: ClosedRange<Double>
     let label: String
+    var accent: Color = Palette.blue
 
     var body: some View {
         GeometryReader { geometry in
@@ -603,12 +667,12 @@ private struct ValueTrack: View {
             let progress = min(max((value - range.lowerBound) / (range.upperBound - range.lowerBound), 0), 1)
             ZStack(alignment: .leading) {
                 Capsule().fill(Palette.line.opacity(0.65)).frame(height: 7)
-                Capsule().fill(Palette.blue)
+                Capsule().fill(accent)
                     .frame(width: max(8, 9 + usable * progress), height: 7)
                 Circle()
                     .fill(.white)
                     .frame(width: 18, height: 18)
-                    .overlay(Circle().stroke(Palette.blue, lineWidth: 2))
+                    .overlay(Circle().stroke(accent, lineWidth: 2))
                     .offset(x: usable * progress)
             }
             .contentShape(Rectangle())
