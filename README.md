@@ -33,9 +33,11 @@ For development, `swift run Mactamatone` also works.
 
 ## Play
 
-1. Press the play button in the widget and move the MacBook display. Pitch changes continuously over about 55°–145°.
-2. The Otamatone mouth and the five bars beside the note follow the pitch in five steps. The mouth button toggles this visual motion; it does not mute the sound.
+1. Press the ♫ button in the widget and move the MacBook display. Pitch changes continuously over about 55°–145°.
+2. The Otamatone mouth and the five bars beside the note follow the pitch in five steps. Mouth animation is always enabled. A diagonal slash over ♫ means the sound is off.
 3. Open settings with the gear button to switch between lid-angle input and manual play. The **Mouth timbre** slider changes the sound's harmonics.
+
+The app starts in English. Use the globe button in the widget or **Language** in settings to choose **English** or **한국어**. Your language selection is saved for the next launch.
 
 Choose **Theme** in settings to switch between Classic, Pink (cherry blossom), Black (cat), Yellow (chick), Galaxy, and Shiba Inu. The widget and settings preview update immediately, including all five mouth positions. Your selection is saved for the next launch. The settings preview places each additional theme in its own decorated scene: cherry blossoms, a moonlit lounge, a sunny meadow, a galaxy, or a warm garden. These are separate background layers behind the original instrument artwork.
 

@@ -5,7 +5,7 @@ import IOKit.hid
 /// stay on a private queue; UI updates return to the main queue.
 final class LidSensor {
     var onAngle: ((Double) -> Void)?
-    var onStatus: ((Bool, String) -> Void)?
+    var onStatus: ((Bool, SensorStatus) -> Void)?
 
     private let queue = DispatchQueue(label: "app.mactamatone.lid", qos: .userInitiated)
     private var manager: IOHIDManager?
@@ -21,9 +21,9 @@ final class LidSensor {
         queue.async { [weak self] in self?.disconnect() }
     }
 
-    private func publish(_ connected: Bool, _ message: String) {
+    private func publish(_ connected: Bool, _ status: SensorStatus) {
         DispatchQueue.main.async { [weak self] in
-            self?.onStatus?(connected, message)
+            self?.onStatus?(connected, status)
         }
     }
 
@@ -39,7 +39,7 @@ final class LidSensor {
         IOHIDManagerSetDeviceMatching(newManager, matching as CFDictionary)
         let openResult = IOHIDManagerOpen(newManager, 0)
         guard openResult == kIOReturnSuccess else {
-            publish(false, "센서 접근에 실패했습니다 (\(String(format: "0x%08X", openResult)))")
+            publish(false, .accessFailed(String(format: "0x%08X", openResult)))
             return
         }
         manager = newManager
@@ -55,14 +55,14 @@ final class LidSensor {
             guard IOHIDDeviceOpen(candidate, 0) == kIOReturnSuccess else { continue }
             if let angle = readAngle(from: candidate) {
                 device = candidate
-                publish(true, "화면 각도 센서 연결됨")
+                publish(true, .connected)
                 send(angle)
                 startPolling()
                 return
             }
             IOHIDDeviceClose(candidate, 0)
         }
-        publish(false, "연속 화면 각도 센서를 찾지 못했습니다")
+        publish(false, .unavailable)
         disconnect()
     }
 
@@ -79,11 +79,11 @@ final class LidSensor {
         guard let angle = readAngle(from: device) else {
             failures += 1
             if failures == 30 {
-                publish(false, "센서 신호가 끊겼습니다. 수동 조절을 사용하세요")
+                publish(false, .disconnected)
             }
             return
         }
-        if failures >= 30 { publish(true, "화면 각도 센서 다시 연결됨") }
+        if failures >= 30 { publish(true, .reconnected) }
         failures = 0
         send(angle)
     }

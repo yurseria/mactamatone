@@ -7,15 +7,17 @@ enum InstrumentTheme: String, CaseIterable, Identifiable {
     static let preferenceKey = "instrumentTheme"
     var id: Self { self }
 
-    var title: String {
+    func title(in language: AppLanguage) -> String {
+        let key: LocalizedText
         switch self {
-        case .classic: return "클래식"
-        case .pink: return "핑크 · 벚꽃"
-        case .cat: return "블랙 · 고양이"
-        case .chick: return "옐로우 · 병아리"
-        case .galaxy: return "갤럭시 · 우주"
-        case .shiba: return "시바견"
+        case .classic: key = .themeClassic
+        case .pink: key = .themePink
+        case .cat: key = .themeCat
+        case .chick: key = .themeChick
+        case .galaxy: key = .themeGalaxy
+        case .shiba: key = .themeShiba
         }
+        return language.text(key)
     }
 
     var accent: Color {

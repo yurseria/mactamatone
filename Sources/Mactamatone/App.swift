@@ -1,28 +1,36 @@
 import AppKit
+import Combine
 import QuartzCore
 import SwiftUI
 
 enum InputMode: String, CaseIterable, Identifiable {
-    case lid = "화면 각도"
-    case manual = "수동 연주"
+    case lid, manual
     var id: Self { self }
+    func title(in language: AppLanguage) -> String {
+        language.text(self == .lid ? .lidInput : .manualInput)
+    }
 }
 
 final class InstrumentModel: ObservableObject {
     @Published var theme: InstrumentTheme {
         didSet { preferences.set(theme.rawValue, forKey: InstrumentTheme.preferenceKey) }
     }
+    @Published var language: AppLanguage {
+        didSet { preferences.set(language.rawValue, forKey: AppLanguage.preferenceKey) }
+    }
     private let preferences: UserDefaults
     @Published var inputMode: InputMode = .lid { didSet { updatePitchLevel(); updateSound() } }
     @Published var lidAngle = 120.0 { didSet { updatePitchLevel(); updateSound() } }
     @Published var manualAngle = 100.0 { didSet { updatePitchLevel(); updateSound() } }
     @Published var mouth = 0.5 { didSet { updateSound() } }
-    @Published var mouthMotionEnabled = true
     @Published private(set) var pitchLevel = 3
     @Published var isPlaying = false { didSet { updateSound() } }
     @Published var sensorConnected = false
-    @Published var statusMessage = "화면 각도 센서 확인 중…"
-    @Published var audioError: String?
+    @Published var sensorStatus: SensorStatus = .checking
+    @Published var audioErrorDetail: String?
+
+    var statusMessage: String { sensorStatus.text(in: language) }
+    var audioError: String? { audioErrorDetail.map { language.format(.audioStartFailed, $0) } }
 
     private let sensor = LidSensor()
     private let synth = OtamatoneSynth()
@@ -31,13 +39,14 @@ final class InstrumentModel: ObservableObject {
     init(preferences: UserDefaults = .standard) {
         self.preferences = preferences
         self.theme = InstrumentTheme.saved(in: preferences)
+        self.language = AppLanguage.saved(in: preferences)
         sensor.onAngle = { [weak self] value in
             self?.lidAngle = value
         }
-        sensor.onStatus = { [weak self] connected, message in
+        sensor.onStatus = { [weak self] connected, status in
             guard let self else { return }
             self.sensorConnected = connected
-            self.statusMessage = message
+            self.sensorStatus = status
             if !connected && self.inputMode == .lid { self.inputMode = .manual }
             self.updateSound()
         }
@@ -46,7 +55,7 @@ final class InstrumentModel: ObservableObject {
     var activeAngle: Double { inputMode == .lid ? lidAngle : manualAngle }
     var safeToPlay: Bool { inputMode == .manual || (sensorConnected && lidAngle >= 25) }
     var normalizedPitch: Double { min(max((activeAngle - 55) / 90, 0), 1) }
-    var visualMouthLevel: Int { mouthMotionEnabled ? pitchLevel : 0 }
+    var visualMouthLevel: Int { pitchLevel }
     var midiPitch: Double { 48 + normalizedPitch * 36 }
     var frequency: Double { 440 * pow(2, (midiPitch - 69) / 12) }
     var noteName: String {
@@ -66,10 +75,10 @@ final class InstrumentModel: ObservableObject {
         guard safeToPlay else { return }
         do {
             try synth.start()
-            audioError = nil
+            audioErrorDetail = nil
             isPlaying = true
         } catch {
-            audioError = "오디오 출력 장치를 시작할 수 없습니다: \(error.localizedDescription)"
+            audioErrorDetail = error.localizedDescription
         }
     }
 
@@ -114,6 +123,7 @@ private final class MactamatoneDelegate: NSObject, NSApplicationDelegate, NSWind
     private let model = InstrumentModel()
     private var widgetWindow: NSPanel?
     private var settingsWindow: NSWindow?
+    private var languageSubscription: AnyCancellable?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         let size = NSSize(width: 320, height: 476)
@@ -126,7 +136,7 @@ private final class MactamatoneDelegate: NSObject, NSApplicationDelegate, NSWind
             backing: .buffered,
             defer: false
         )
-        widget.title = "맥타마톤"
+        widget.title = model.language.text(.appTitle)
         widget.level = .floating
         widget.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
         widget.isOpaque = false
@@ -142,6 +152,9 @@ private final class MactamatoneDelegate: NSObject, NSApplicationDelegate, NSWind
         widget.delegate = self
         widget.orderFrontRegardless()
         widgetWindow = widget
+        languageSubscription = model.$language.sink { [weak widget] language in
+            widget?.title = language.text(.appTitle)
+        }
         model.start()
     }
 
@@ -176,6 +189,7 @@ private final class MactamatoneDelegate: NSObject, NSApplicationDelegate, NSWind
 /// Keep native window controls while letting the theme fill the titlebar area.
 final class SettingsWindow: NSWindow {
     static let trafficLightInset: CGFloat = 32
+    private var languageSubscription: AnyCancellable?
 
     init(model: InstrumentModel) {
         super.init(
@@ -185,13 +199,16 @@ final class SettingsWindow: NSWindow {
             defer: false
         )
         isReleasedWhenClosed = false
-        title = "맥타마톤 설정"
+        title = model.language.text(.settingsTitle)
         titleVisibility = .hidden
         titlebarAppearsTransparent = true
         titlebarSeparatorStyle = .none
         backgroundColor = NSColor(model.theme.backdrop)
         contentView = NSHostingView(rootView: SettingsView(model: model)
             .frame(minWidth: 840, minHeight: 620))
+        languageSubscription = model.$language.sink { [weak self] language in
+            self?.title = language.text(.settingsTitle)
+        }
     }
 }
 
@@ -202,10 +219,14 @@ private enum Palette {
     static let line = Color(red: 0.68, green: 0.72, blue: 0.79)
 }
 
+// Select the property wrapper explicitly when an SDK also exports a State macro.
+private typealias WidgetState<Value> = SwiftUI.State<Value>
+
 struct FloatingWidgetView: View {
     @ObservedObject var model: InstrumentModel
     let openSettings: () -> Void
     let quit: () -> Void
+    @WidgetState private var isLanguagePickerPresented = false
 
     var body: some View {
         ZStack {
@@ -214,23 +235,29 @@ struct FloatingWidgetView: View {
 
             WidgetArtView(theme: model.theme, level: model.visualMouthLevel)
             .frame(width: 252, height: 372)
-            .accessibilityLabel("\(model.theme.title), 입 열림 \(model.visualMouthLevel + 1)단계")
+            .accessibilityLabel(model.language.format(.artDescription, model.theme.title(in: model.language), model.visualMouthLevel + 1))
 
             VStack {
                 HStack {
-                    circleButton(model.mouthMotionEnabled ? "mouth.fill" : "mouth",
-                                 label: model.mouthMotionEnabled ? "입 움직임 끄기" : "입 움직임 켜기",
-                                 action: { model.mouthMotionEnabled.toggle() })
+                    languageButton
                     Spacer()
-                    circleButton("xmark", label: "앱 종료", action: quit)
+                    circleButton("xmark", label: model.language.text(.quit), action: quit)
                 }
                 Spacer()
                 HStack(spacing: 8) {
-                    circleButton(model.isPlaying ? "stop.fill" : "play.fill",
-                                 label: model.isPlaying ? "연주 멈추기" : "연주 시작",
-                                 action: model.togglePlay)
-                        .disabled(!model.safeToPlay && !model.isPlaying)
-                        .opacity(model.safeToPlay || model.isPlaying ? 1 : 0.5)
+                    Button(action: model.togglePlay) {
+                        MusicPlaybackIcon(isPlaying: model.isPlaying && model.safeToPlay)
+                            .foregroundStyle(.white)
+                            .shadow(color: Palette.ink.opacity(0.35), radius: 2, y: 1)
+                            .frame(width: 44, height: 44)
+                            .contentShape(Circle())
+                    }
+                    .buttonStyle(.plain)
+                    .modifier(WidgetLiquidGlass())
+                    .accessibilityLabel(model.language.text(model.isPlaying ? .stopPlaying : .startPlaying))
+                    .help(model.language.text(model.isPlaying ? .stopPlaying : .startPlaying))
+                    .disabled(!model.safeToPlay && !model.isPlaying)
+                    .opacity(model.safeToPlay || model.isPlaying ? 1 : 0.5)
 
                     HStack(spacing: 8) {
                         Text(model.noteName)
@@ -249,9 +276,9 @@ struct FloatingWidgetView: View {
                     .frame(height: 44)
                     .modifier(WidgetLiquidGlassCapsule())
                     .accessibilityElement(children: .combine)
-                    .accessibilityLabel("현재 음 \(model.noteName)")
+                    .accessibilityLabel(model.language.format(.currentNote, model.noteName))
 
-                    circleButton("gearshape", label: "설정 열기", action: openSettings)
+                    circleButton("gearshape", label: model.language.text(.openSettings), action: openSettings)
                 }
             }
             .padding(.horizontal, 21)
@@ -259,6 +286,41 @@ struct FloatingWidgetView: View {
             .padding(.bottom, 18)
         }
         .frame(width: 320, height: 476)
+        .environment(\.locale, model.language.locale)
+    }
+
+    private var languageButton: some View {
+        circleButton("globe", label: model.language.text(.language)) {
+            isLanguagePickerPresented.toggle()
+        }
+        .accessibilityValue(model.language.title)
+        .popover(isPresented: $isLanguagePickerPresented) {
+            VStack(spacing: 4) {
+                ForEach(AppLanguage.allCases) { language in
+                    Button {
+                        model.language = language
+                        isLanguagePickerPresented = false
+                    } label: {
+                        HStack {
+                            Text(language.title)
+                            Spacer()
+                            Image(systemName: "checkmark")
+                                .opacity(model.language == language ? 1 : 0)
+                                .accessibilityHidden(true)
+                        }
+                        .padding(10)
+                        .contentShape(Rectangle())
+                        .background(model.language == language ? Color.accentColor.opacity(0.15) : .clear,
+                                    in: RoundedRectangle(cornerRadius: 8))
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel(language.title)
+                    .accessibilityAddTraits(model.language == language ? [.isSelected] : [])
+                }
+            }
+            .padding(10)
+            .frame(width: 170)
+        }
     }
 
     private var widgetBackdrop: some View {
@@ -289,6 +351,27 @@ struct FloatingWidgetView: View {
         .modifier(WidgetLiquidGlass())
         .accessibilityLabel(label)
         .help(label)
+    }
+}
+
+/// A beamed note stays recognizable in both sound states; the slash means muted.
+struct MusicPlaybackIcon: View {
+    let isPlaying: Bool
+
+    var body: some View {
+        Text("♫")
+            .font(.system(size: 26, weight: .medium))
+            .overlay {
+                if !isPlaying {
+                    Path { path in
+                        path.move(to: CGPoint(x: 2, y: 29))
+                        path.addLine(to: CGPoint(x: 25, y: 3))
+                    }
+                    .stroke(style: StrokeStyle(lineWidth: 2.5, lineCap: .round))
+                    .frame(width: 27, height: 32)
+                }
+            }
+            .accessibilityHidden(true)
     }
 }
 
@@ -388,6 +471,7 @@ struct SettingsView: View {
         .background(model.theme.backdrop.ignoresSafeArea())
         .ignoresSafeArea(.container, edges: .top)
         .foregroundStyle(Palette.ink)
+        .environment(\.locale, model.language.locale)
     }
 
     private var controlPanel: some View {
@@ -396,18 +480,27 @@ struct SettingsView: View {
                 Text("Otamatone")
                     .font(.system(size: 30, weight: .black, design: .rounded))
                     .tracking(-1.5)
-                Text("MAC INSTRUMENT")
+                Text(model.language.text(.instrumentSubtitle))
                     .font(.system(size: 10, weight: .bold, design: .rounded))
                     .tracking(3)
                     .foregroundStyle(Palette.muted)
                     .padding(.top, 2)
-                Text("화면을 움직여 연주하세요")
+                Text(model.language.text(.playInstruction))
                     .font(.system(size: 14, weight: .medium))
                     .foregroundStyle(Palette.muted)
                     .padding(.top, 17)
 
+                Picker(model.language.text(.language), selection: $model.language) {
+                    ForEach(AppLanguage.allCases) { language in
+                        Text(language.title).tag(language)
+                    }
+                }
+                .font(.system(size: 12, weight: .semibold))
+                .pickerStyle(.menu)
+                .padding(.top, 22)
+
                 themePicker
-                    .padding(.top, 22)
+                    .padding(.top, 12)
 
                 Spacer(minLength: 16)
 
@@ -420,9 +513,9 @@ struct SettingsView: View {
                                         in: RoundedRectangle(cornerRadius: 17))
                             .foregroundStyle(.white)
                         VStack(alignment: .leading, spacing: 3) {
-                            Text(model.isPlaying ? "소리 멈추기" : "연주 시작")
+                            Text(model.language.text(model.isPlaying ? .stopPlaying : .startPlaying))
                                 .font(.system(size: 16, weight: .bold, design: .rounded))
-                            Text(model.safeToPlay ? "화면을 천천히 움직여요" : "화면을 열어주세요")
+                            Text(model.language.text(!model.safeToPlay ? .openLid : model.inputMode == .manual ? .adjustPitch : .moveLidSlowly))
                                 .font(.system(size: 11, weight: .medium))
                                 .foregroundStyle(Palette.muted)
                         }
@@ -432,17 +525,17 @@ struct SettingsView: View {
                 }
                 .buttonStyle(.plain)
                 .disabled(!model.safeToPlay && !model.isPlaying)
-                .accessibilityHint("소리를 켠 뒤 화면 각도를 움직이면 음높이가 바뀝니다")
+                .accessibilityHint(model.language.text(.playHint))
 
                 Rectangle().fill(Palette.line.opacity(0.55)).frame(height: 1).padding(.vertical, 25)
 
-                Text("입력 방식")
+                Text(model.language.text(.inputMode))
                     .font(.system(size: 12, weight: .semibold))
                     .foregroundStyle(Palette.muted)
                 HStack(spacing: 6) {
                     ForEach(InputMode.allCases) { mode in
                         Button { model.inputMode = mode } label: {
-                            Text(mode.rawValue)
+                            Text(mode.title(in: model.language))
                                 .font(.system(size: 12, weight: .semibold))
                                 .frame(maxWidth: .infinity)
                                 .padding(.vertical, 10)
@@ -457,14 +550,14 @@ struct SettingsView: View {
 
                 if model.inputMode == .manual {
                     VStack(alignment: .leading, spacing: 7) {
-                        Text("음높이")
+                        Text(model.language.text(.pitch))
                             .font(.system(size: 12, weight: .semibold))
-                        ValueTrack(value: $model.manualAngle, range: 55...145, label: "음높이", accent: model.theme.accent)
+                        ValueTrack(value: $model.manualAngle, range: 55...145, label: model.language.text(.pitch), accent: model.theme.accent)
                     }
                     .padding(.top, 22)
                 } else {
                     Text(model.lidAngle < 25 && model.sensorConnected
-                         ? "화면을 조금 더 열면 연주할 수 있어요."
+                         ? model.language.text(.openLidMore)
                          : model.statusMessage)
                         .font(.system(size: 12, weight: .medium))
                         .foregroundStyle(Palette.muted)
@@ -474,14 +567,14 @@ struct SettingsView: View {
 
                 VStack(alignment: .leading, spacing: 7) {
                     HStack {
-                        Text("입 음색")
+                        Text(model.language.text(.mouthTimbre))
                             .font(.system(size: 12, weight: .semibold))
                         Spacer()
                         Text("\(Int(model.mouth * 100))%")
                             .font(.system(size: 11, design: .monospaced))
                             .foregroundStyle(Palette.muted)
                     }
-                    ValueTrack(value: $model.mouth, range: 0.1...1, label: "입 음색", accent: model.theme.accent)
+                    ValueTrack(value: $model.mouth, range: 0.1...1, label: model.language.text(.mouthTimbre), accent: model.theme.accent)
                 }
                 .padding(.top, 22)
 
@@ -491,7 +584,7 @@ struct SettingsView: View {
                     Circle()
                         .fill(model.sensorConnected ? model.theme.accent : Palette.muted)
                         .frame(width: 8, height: 8)
-                    Text(model.sensorConnected ? "센서 연결됨" : "수동 모드 사용 가능")
+                    Text(model.language.text(model.sensorConnected ? .sensorConnected : .manualAvailable))
                         .font(.system(size: 11, weight: .semibold))
                         .foregroundStyle(Palette.muted)
                 }
@@ -513,9 +606,9 @@ struct SettingsView: View {
 
     private var themePicker: some View {
         VStack(alignment: .leading, spacing: 10) {
-            Picker("테마", selection: $model.theme) {
+            Picker(model.language.text(.theme), selection: $model.theme) {
                 ForEach(InstrumentTheme.allCases) { theme in
-                    Text(theme.title).tag(theme)
+                    Text(theme.title(in: model.language)).tag(theme)
                 }
             }
             .font(.system(size: 12, weight: .semibold))
@@ -533,8 +626,8 @@ struct SettingsView: View {
                                 .stroke(model.theme == theme ? theme.accent : .clear, lineWidth: 2))
                     }
                     .buttonStyle(.plain)
-                    .help(theme.title)
-                    .accessibilityLabel(theme.title)
+                    .help(theme.title(in: model.language))
+                    .accessibilityLabel(theme.title(in: model.language))
                     .accessibilityAddTraits(model.theme == theme ? [.isSelected] : [])
                 }
             }
@@ -589,7 +682,7 @@ struct SettingsView: View {
 
                 VStack {
                     HStack(alignment: .top) {
-                        Text("LIVE  ·  OTAMATONE")
+                        Text(model.language.text(.liveBadge))
                             .font(.system(size: 10, weight: .bold, design: .rounded))
                             .tracking(2)
                             .foregroundStyle(Palette.ink.opacity(0.75))
@@ -601,7 +694,7 @@ struct SettingsView: View {
                     Spacer()
                     HStack {
                         Spacer()
-                        Text("화면 각도  \(Int(model.activeAngle.rounded()))°")
+                        Text(model.language.format(.lidAngleValue, Int(model.activeAngle.rounded())))
                             .font(.system(size: 12, weight: .semibold))
                             .padding(.horizontal, 15)
                             .padding(.vertical, 10)
@@ -638,7 +731,7 @@ struct SettingsView: View {
                         .frame(width: 6, height: CGFloat([19, 31, 24, 37, 29][index]))
                 }
             }
-            Text(model.isPlaying && model.safeToPlay ? "SINGING…" : "READY")
+            Text(model.language.text(model.isPlaying && model.safeToPlay ? .singing : .ready))
                 .font(.system(size: 10, weight: .bold, design: .rounded))
                 .tracking(1.4)
                 .foregroundStyle(Palette.muted)

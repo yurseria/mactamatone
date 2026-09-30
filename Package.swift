@@ -3,6 +3,7 @@ import PackageDescription
 
 let package = Package(
     name: "Mactamatone",
+    defaultLocalization: "en",
     platforms: [.macOS(.v14)],
     products: [.executable(name: "Mactamatone", targets: ["Mactamatone"])],
     targets: [
