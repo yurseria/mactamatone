@@ -16,7 +16,7 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Verify tag matches app version
-        shell: zsh
+        shell: bash
         run: |
           version=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' Info.plist)
           if [[ "$GITHUB_REF_NAME" != "v$version" ]]; then
@@ -25,11 +25,11 @@ jobs:
           fi
 
       - name: Build and package Apple Silicon DMG
-        shell: zsh
+        shell: bash
         run: ./scripts/package-dmg.sh
 
       - name: Publish GitHub Release
-        shell: zsh
+        shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
