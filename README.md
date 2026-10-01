@@ -51,6 +51,8 @@ The app reads feature report 1 from Apple's `las` HID lid-angle device on a sepa
 
 The five supplied Otamatone images are stored in `Sources/Mactamatone/Resources/OtamatoneLevel0.png` through `OtamatoneLevel4.png`. The widget uses matching transparent cutouts named `OtamatoneWidgetLevel0.png` through `OtamatoneWidgetLevel4.png`. The initial design reference is in `design/Reference.png`. Additional theme cutouts are named `OtamatonePinkLevel0.png` through `OtamatoneShibaLevel4.png`. Original generated strips and their prompt notes are in `design/Themes/`; run `swift scripts/prepare-theme-art.swift` to rebuild their cutouts.
 
+The app uses the music-note icon in `design/AppIcon/Music.png`. An Otamatone face alternative is in `design/AppIcon/Face.png`; both PNG and ICNS variants are included in `design/AppIcon/`. Run `./scripts/prepare-app-icon.sh` to regenerate `Sources/Mactamatone/Resources/AppIcon.icns`, which `build.sh` includes in the app for Finder and Dock. See `design/AppIcon/README.md` for both icon builds.
+
 ## Releases
 
 A `vX.Y.Z` tag matching `CFBundleShortVersionString` in `Info.plist` builds an Apple Silicon DMG and publishes it to GitHub Releases. The [Homebrew tap](https://github.com/yurseria/homebrew-tap) checks stable releases and updates the cask checksum automatically.

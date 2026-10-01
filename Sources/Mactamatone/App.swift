@@ -126,6 +126,10 @@ private final class MactamatoneDelegate: NSObject, NSApplicationDelegate, NSWind
     private var languageSubscription: AnyCancellable?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
+        if let url = Bundle.module.url(forResource: "AppIcon", withExtension: "icns"),
+           let icon = NSImage(contentsOf: url) {
+            NSApp.applicationIconImage = icon
+        }
         let size = NSSize(width: 320, height: 476)
         let screen = NSScreen.main?.visibleFrame ?? NSRect(x: 0, y: 0, width: 1440, height: 900)
         let origin = NSPoint(x: screen.maxX - size.width - 32,

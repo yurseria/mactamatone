@@ -51,6 +51,8 @@ open dist/Mactamatone.app
 
 제공된 다섯 이미지는 `Sources/Mactamatone/Resources/OtamatoneLevel0.png`부터 `OtamatoneLevel4.png`까지 보관했습니다. 위젯은 배경을 제거한 `OtamatoneWidgetLevel0.png`부터 `OtamatoneWidgetLevel4.png`까지 사용합니다. 처음 제공된 화면 시안은 `design/Reference.png`에 있습니다. 추가 테마 이미지는 `OtamatonePinkLevel0.png`부터 `OtamatoneShibaLevel4.png`까지 보관합니다. 생성 원본과 프롬프트 기록은 `design/Themes/`에 있으며, `swift scripts/prepare-theme-art.swift`로 위젯 리소스를 재생성할 수 있습니다.
 
+앱 기본 아이콘은 `design/AppIcon/Music.png`의 음표 로고입니다. 오타마톤 얼굴 버전은 `design/AppIcon/Face.png`에 있으며, `design/AppIcon/`에 두 버전의 PNG와 ICNS를 함께 보관합니다. `./scripts/prepare-app-icon.sh`로 기본 앱 아이콘을 재생성할 수 있으며, `build.sh`가 Finder와 Dock에서 사용하는 아이콘을 앱에 포함합니다. 두 버전의 빌드 방법은 `design/AppIcon/README.md`에 있습니다.
+
 ## 릴리스
 
 `Info.plist`의 `CFBundleShortVersionString`과 일치하는 `vX.Y.Z` 태그를 푸시하면 Apple Silicon DMG를 빌드해 GitHub Releases에 게시합니다. [Homebrew tap](https://github.com/yurseria/homebrew-tap)은 정식 릴리스를 확인하고 Cask 체크섬을 자동으로 갱신합니다.
