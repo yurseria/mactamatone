@@ -10,6 +10,7 @@ struct ThemeChecks {
     static func main() throws {
         let app = NSApplication.shared
         app.setActivationPolicy(.prohibited)
+        app.appearance = NSAppearance(named: .aqua)
         let suite = "app.mactamatone.theme-checks.\(UUID().uuidString)"
         let preferences = UserDefaults(suiteName: suite)!
         defer { preferences.removePersistentDomain(forName: suite) }
@@ -100,11 +101,31 @@ struct ThemeChecks {
             }
             print("\(theme.rawValue): saved selection, five transparent frames, pitch unchanged, UI rendered")
         }
-        print("All six themes, automatic mouth animation, and both languages verified.")
+        app.appearance = NSAppearance(named: .darkAqua)
+        precondition(app.effectiveAppearance.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua)
+        for language in AppLanguage.allCases {
+            model.language = language
+            for theme in [InstrumentTheme.classic, .shiba] {
+                model.theme = theme
+                try snapshotSettings(model: model, size: NSSize(width: 962, height: 700),
+                             colorScheme: .dark,
+                             to: previews.appendingPathComponent("\(theme.rawValue)-settings-dark-\(language.rawValue).png"))
+            }
+        }
+        print("All six themes, automatic mouth animation, both languages, and dark-mode settings rendered.")
     }
 
-    static func snapshotSettings(model: InstrumentModel, size: NSSize, to url: URL) throws {
+    static func snapshotSettings(model: InstrumentModel, size: NSSize,
+                                 colorScheme: ColorScheme? = nil, to url: URL) throws {
         let window = SettingsWindow(model: model)
+        if let colorScheme {
+            // Simulate the inherited SwiftUI scheme as well as AppKit's dark appearance.
+            window.contentView = NSHostingView(rootView: SettingsView(model: model)
+                .environment(\.colorScheme, colorScheme)
+                .frame(minWidth: 840, minHeight: 620))
+        }
+        precondition(window.effectiveAppearance.bestMatch(from: [.aqua, .darkAqua]) == .aqua,
+                     "Native settings controls must match the light theme palette")
         window.setContentSize(size)
         let host = window.contentView!
         host.layoutSubtreeIfNeeded()

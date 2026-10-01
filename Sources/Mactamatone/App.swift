@@ -203,6 +203,8 @@ final class SettingsWindow: NSWindow {
         titleVisibility = .hidden
         titlebarAppearsTransparent = true
         titlebarSeparatorStyle = .none
+        // The settings palette is light, so native controls must use matching colors.
+        appearance = NSAppearance(named: .aqua)
         backgroundColor = NSColor(model.theme.backdrop)
         contentView = NSHostingView(rootView: SettingsView(model: model)
             .frame(minWidth: 840, minHeight: 620))
@@ -471,6 +473,7 @@ struct SettingsView: View {
         .background(model.theme.backdrop.ignoresSafeArea())
         .ignoresSafeArea(.container, edges: .top)
         .foregroundStyle(Palette.ink)
+        .environment(\.colorScheme, .light)
         .environment(\.locale, model.language.locale)
     }
 
