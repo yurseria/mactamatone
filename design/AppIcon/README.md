@@ -1,35 +1,37 @@
-# Mactamatone app icon variants
+# Mactamatone app icons
 
-Two variants were created with the built-in `image_gen` tool:
+The default app icon is the user-provided Otamatone illustration on a blue background:
 
-- **Music note (default):** `Music.png` and `Music.icns`
-- **Otamatone face:** `Face.png` and `Face.icns`
+![Default Otamatone app icon](Otamatone.png)
 
-![Music-note and face icons at 16, 32, 64, and 128px on light and dark backgrounds](Comparison.png)
+- `Otamatone-source.png`: unchanged supplied artwork.
+- `Otamatone.png`: 1024px app-icon preview with a transparent margin and rounded tile.
+- `Otamatone.icns`: all standard and Retina sizes, from 16 to 1024px.
 
-Original generated images are retained as `Music-source.png` and `Face-source.png`. The existing classic Otamatone artwork guided the materials and face identity.
-
-The packaging script normalizes the artwork to 1024px, applies a smooth rounded-tile mask to exclude alpha-matting debris outside the generated tile, and creates all standard and Retina sizes from 16 to 1024px. Source images remain unchanged.
+The complete source image is fitted inside the tile so the instrument is preserved. `build.sh` packages `Sources/Mactamatone/Resources/AppIcon.icns` for Finder, and the app applies it at startup for Dock and source-based runs.
 
 ## Regenerate
 
 ```sh
-# Default music-note app icon and preview
+# Default app icon and preview
 ./scripts/prepare-app-icon.sh
-cp Sources/Mactamatone/Resources/AppIcon.icns design/AppIcon/Music.icns
-
-# Alternative face icon and preview
-./scripts/prepare-app-icon.sh design/AppIcon/Face-source.png design/AppIcon/Face.icns design/AppIcon/Face.png
+cp Sources/Mactamatone/Resources/AppIcon.icns design/AppIcon/Otamatone.icns
 ```
 
-To use the face icon in a local app build:
+## Previous alternatives
+
+The earlier music-note and face-only variants are retained as `Music.png` / `Music.icns` and `Face.png` / `Face.icns`. Their original generated artwork is in `Music-source.png` and `Face-source.png`.
+
+![Previous music-note and face icons at small sizes](Comparison.png)
+
+These variants were created with the built-in `image_gen` tool. Their `generated` layout masks out stray pixels beyond the existing tile:
 
 ```sh
-cp design/AppIcon/Face.icns Sources/Mactamatone/Resources/AppIcon.icns
-./build.sh
+./scripts/prepare-app-icon.sh design/AppIcon/Music-source.png design/AppIcon/Music.icns design/AppIcon/Music.png generated
+./scripts/prepare-app-icon.sh design/AppIcon/Face-source.png design/AppIcon/Face.icns design/AppIcon/Face.png generated
 ```
 
-`build.sh` copies the selected ICNS into the app's main resource directory. `CFBundleIconFile` references it for Finder, and the app also applies the resource at startup for Dock and source-based runs.
+To use an alternative locally, copy its ICNS to `Sources/Mactamatone/Resources/AppIcon.icns` and run `./build.sh`.
 
 ## Music-note prompt
 

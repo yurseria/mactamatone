@@ -12,6 +12,9 @@ enum InputMode: String, CaseIterable, Identifiable {
 }
 
 final class InstrumentModel: ObservableObject {
+    static let pitchAngleRange: ClosedRange<Double> = 25...130
+    private static var pitchAngleSpan: Double { pitchAngleRange.upperBound - pitchAngleRange.lowerBound }
+
     @Published var theme: InstrumentTheme {
         didSet { preferences.set(theme.rawValue, forKey: InstrumentTheme.preferenceKey) }
     }
@@ -32,6 +35,7 @@ final class InstrumentModel: ObservableObject {
     var statusMessage: String { sensorStatus.text(in: language) }
     var audioError: String? { audioErrorDetail.map { language.format(.audioStartFailed, $0) } }
 
+    let audioActivity = AudioActivity()
     private let sensor = LidSensor()
     private let synth = OtamatoneSynth()
     private var hasStarted = false
@@ -50,11 +54,12 @@ final class InstrumentModel: ObservableObject {
             if !connected && self.inputMode == .lid { self.inputMode = .manual }
             self.updateSound()
         }
+        updatePitchLevel()
     }
 
     var activeAngle: Double { inputMode == .lid ? lidAngle : manualAngle }
-    var safeToPlay: Bool { inputMode == .manual || (sensorConnected && lidAngle >= 25) }
-    var normalizedPitch: Double { min(max((activeAngle - 55) / 90, 0), 1) }
+    var safeToPlay: Bool { inputMode == .manual || (sensorConnected && lidAngle >= Self.pitchAngleRange.lowerBound) }
+    var normalizedPitch: Double { min(max((activeAngle - Self.pitchAngleRange.lowerBound) / Self.pitchAngleSpan, 0), 1) }
     var visualMouthLevel: Int { pitchLevel }
     var midiPitch: Double { 48 + normalizedPitch * 36 }
     var frequency: Double { 440 * pow(2, (midiPitch - 69) / 12) }
@@ -68,6 +73,7 @@ final class InstrumentModel: ObservableObject {
         guard !hasStarted else { return }
         hasStarted = true
         sensor.start()
+        audioActivity.start { [weak self] in self?.synth.outputSample ?? .silent }
     }
 
     func togglePlay() {
@@ -85,6 +91,7 @@ final class InstrumentModel: ObservableObject {
     func stop() {
         isPlaying = false
         synth.stop()
+        audioActivity.stop()
         sensor.stop()
         hasStarted = false
     }
@@ -92,7 +99,7 @@ final class InstrumentModel: ObservableObject {
     private func updatePitchLevel() {
         // Keep the current image until the angle is safely past a level boundary.
         // This prevents sensor noise from switching two images every 33 ms.
-        let margin = 2.0 / 90.0
+        let margin = 2.0 / Self.pitchAngleSpan
         let pitch = normalizedPitch
         var next = pitchLevel
         while next < 4 && pitch >= Double(next + 1) / 5.0 + margin { next += 1 }
@@ -237,6 +244,9 @@ struct FloatingWidgetView: View {
     var body: some View {
         ZStack {
             widgetBackdrop
+                .offset(y: 42)
+
+            AudioReactiveGlow(theme: model.theme, activity: model.audioActivity)
                 .offset(y: 42)
 
             WidgetArtView(theme: model.theme, level: model.visualMouthLevel)
@@ -559,7 +569,7 @@ struct SettingsView: View {
                     VStack(alignment: .leading, spacing: 7) {
                         Text(model.language.text(.pitch))
                             .font(.system(size: 12, weight: .semibold))
-                        ValueTrack(value: $model.manualAngle, range: 55...145, label: model.language.text(.pitch), accent: model.theme.accent)
+                        ValueTrack(value: $model.manualAngle, range: InstrumentModel.pitchAngleRange, label: model.language.text(.pitch), accent: model.theme.accent)
                     }
                     .padding(.top, 22)
                 } else {
@@ -643,6 +653,7 @@ struct SettingsView: View {
 
     private var stage: some View {
         GeometryReader { geometry in
+            let artSide = min(geometry.size.width, geometry.size.height)
             ZStack(alignment: .topLeading) {
                 model.theme.backdrop
                 if let background = Art.backgroundImage(theme: model.theme) {
@@ -655,7 +666,6 @@ struct SettingsView: View {
                         .opacity(model.theme.backgroundOpacity)
                         .accessibilityHidden(true)
                         .allowsHitTesting(false)
-                    let artSide = min(geometry.size.width, geometry.size.height)
                     Ellipse()
                         .fill(.black.opacity(0.08))
                         .frame(width: artSide * 0.28, height: artSide * 0.022)
@@ -678,6 +688,23 @@ struct SettingsView: View {
                 .animation(.easeInOut(duration: 0.14), value: model.visualMouthLevel)
                 ForEach(0..<5) { level in
                     Image(nsImage: Art.stageImage(theme: model.theme, level: level))
+                        .resizable()
+                        .interpolation(.high)
+                        .aspectRatio(contentMode: .fit)
+                        .frame(width: geometry.size.width, height: geometry.size.height)
+                        .opacity(model.theme == .classic && model.visualMouthLevel == level ? 1 : 0)
+                        .accessibilityHidden(true)
+                }
+                .animation(.easeInOut(duration: 0.14), value: model.visualMouthLevel)
+
+                AudioReactiveGlow(theme: model.theme, activity: model.audioActivity, diameter: artSide * 0.82)
+                    .position(x: geometry.size.width / 2,
+                              y: (geometry.size.height - artSide) / 2 + artSide * 0.64)
+
+                // Transparent foreground keeps the halo behind the instrument,
+                // including Classic's existing background and floor shadow.
+                ForEach(0..<5) { level in
+                    Image(nsImage: Art.widgetImage(theme: model.theme, level: level))
                         .resizable()
                         .interpolation(.high)
                         .aspectRatio(contentMode: .fit)

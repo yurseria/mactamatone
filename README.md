@@ -3,14 +3,12 @@
 English / [한국어](README_KO.md)
 
 <p align="center">
-  <img src="WidgetPreview.png" alt="Mactamatone floating widget" width="360">
+  <img src="design/AppIcon/Otamatone.png" alt="Mactamatone logo" width="180">
 </p>
 
-Play an Otamatone by tilting your MacBook display. Mactamatone opens as a draggable floating widget, maps the lid angle to a three-octave pitch range, and shows five mouth positions that follow the pitch.
+Play an Otamatone by tilting your MacBook display. A floating instrument follows your screen angle with three octaves of sound, animated mouth positions, and six themes.
 
 ## Install
-
-### Homebrew
 
 Requires an Apple Silicon Mac running macOS 14 or later.
 
@@ -18,41 +16,35 @@ Requires an Apple Silicon Mac running macOS 14 or later.
 brew install --cask yurseria/tap/mactamatone
 ```
 
-The app is ad hoc signed and is not Apple notarized. As with the other apps in [Yurseria's tap](https://github.com/yurseria/homebrew-tap), the cask removes the installed app's quarantine attribute. Install it only if you trust this project and its source.
+You can also download a DMG from [Releases](https://github.com/yurseria/mactamatone/releases). For source builds and installation details, see the [development guide](docs/DEVELOPMENT.md).
 
-### Build from source
+## Widget
 
-Install Xcode Command Line Tools, then run:
+<p align="center">
+  <img src="docs/images/widget.png" alt="Floating Galaxy-theme widget during playback" width="320">
+</p>
 
-```sh
-./build.sh
-open dist/Mactamatone.app
-```
+- Press **♫** to turn sound on or off. A diagonal slash means sound is off.
+- Move the display to change pitch continuously from **C3 to C6 over 25°–130°**. Sound stops below 25°.
+- The mouth and five bars follow the pitch. During playback, a theme-colored halo grows and shrinks every two seconds.
+- Drag the instrument to move the widget. Use the globe to change language, the gear to open settings, and **X** to quit.
 
-For development, `swift run Mactamatone` also works.
+The widget stays available when you close settings. On macOS 26 and later, its background uses Liquid Glass.
 
-## Play
+## Settings
 
-1. Press the ♫ button in the widget and move the MacBook display. Pitch changes continuously over about 55°–145°.
-2. The Otamatone mouth and the five bars beside the note follow the pitch in five steps. Mouth animation is always enabled. A diagonal slash over ♫ means the sound is off.
-3. Open settings with the gear button to switch between lid-angle input and manual play. The **Mouth timbre** slider changes the sound's harmonics.
+<p align="center">
+  <img src="docs/images/settings.png" alt="Settings window with theme, language, manual pitch, and mouth timbre controls" width="960">
+</p>
 
-The app starts in English. Use the globe button in the widget or **Language** in settings to choose **English** or **한국어**. Your language selection is saved for the next launch.
+- Choose **Classic, Pink, Black Cat, Yellow Chick, Galaxy, or Shiba Inu**. Each theme has its own scene and playback halo.
+- Switch between **lid-angle input** and **manual play**. Manual play is also available when the lid sensor is unavailable.
+- Adjust **Mouth timbre** to change the character of the sound.
+- Choose **English** or **한국어**. English is the default; your language and theme are saved for the next launch.
 
-Choose **Theme** in settings to switch between Classic, Pink (cherry blossom), Black (cat), Yellow (chick), Galaxy, and Shiba Inu. The widget and settings preview update immediately, including all five mouth positions. Your selection is saved for the next launch. The settings preview places each additional theme in its own decorated scene: cherry blossoms, a moonlit lounge, a sunny meadow, a galaxy, or a warm garden. These are separate background layers behind the original instrument artwork.
+The screenshots show the Galaxy theme in manual play. Enable macOS **Reduce Motion** to keep the halo still.
 
-Drag the Otamatone to move the widget. Closing settings keeps the widget and audio running. The X button quits the app. On macOS 26 and later, the widget uses Liquid Glass.
+## Documentation
 
-If the lid sensor is unavailable, the app switches to manual play. The manual pitch slider lets you try the sound and mouth motion. In lid-angle mode, audio stops when the display is almost closed.
-
-## How it works
-
-The app reads feature report 1 from Apple's `las` HID lid-angle device on a separate queue and synthesizes audio with `AVAudioEngine`. This sensor is not exposed through a public Core Motion API, so availability can vary by Mac model or macOS version. The sensor access pattern and report format were informed by [macTilt's LidSensor.swift](https://github.com/lqSky7/iphone-duo-macos-animation/blob/main/Sources/LidSensor.swift).
-
-The five supplied Otamatone images are stored in `Sources/Mactamatone/Resources/OtamatoneLevel0.png` through `OtamatoneLevel4.png`. The widget uses matching transparent cutouts named `OtamatoneWidgetLevel0.png` through `OtamatoneWidgetLevel4.png`. The initial design reference is in `design/Reference.png`. Additional theme cutouts are named `OtamatonePinkLevel0.png` through `OtamatoneShibaLevel4.png`. Original generated strips and their prompt notes are in `design/Themes/`; run `swift scripts/prepare-theme-art.swift` to rebuild their cutouts.
-
-The app uses the music-note icon in `design/AppIcon/Music.png`. An Otamatone face alternative is in `design/AppIcon/Face.png`; both PNG and ICNS variants are included in `design/AppIcon/`. Run `./scripts/prepare-app-icon.sh` to regenerate `Sources/Mactamatone/Resources/AppIcon.icns`, which `build.sh` includes in the app for Finder and Dock. See `design/AppIcon/README.md` for both icon builds.
-
-## Releases
-
-A `vX.Y.Z` tag matching `CFBundleShortVersionString` in `Info.plist` builds an Apple Silicon DMG and publishes it to GitHub Releases. The [Homebrew tap](https://github.com/yurseria/homebrew-tap) checks stable releases and updates the cask checksum automatically.
+- [Development](docs/DEVELOPMENT.md): source builds, checks, screenshot capture, and releases.
+- [Implementation](docs/IMPLEMENTATION.md): lid sensor, pitch mapping, audio, and artwork.

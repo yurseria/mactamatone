@@ -1,9 +1,11 @@
 import AppKit
 
-// Normalize the generated artwork to the macOS icon canvas. The rounded tile
-// mask excludes alpha-matting debris outside the tile while preserving the art.
+// Normalize artwork to a rounded macOS icon tile. Inset full-bleed sources;
+// generated sources already contain the tile and only need their outer mask.
 let source = URL(fileURLWithPath: CommandLine.arguments[1])
 let output = URL(fileURLWithPath: CommandLine.arguments[2])
+let layout = CommandLine.arguments.count > 3 ? CommandLine.arguments[3] : "inset"
+precondition(["inset", "generated"].contains(layout), "Expected inset or generated layout")
 guard let image = NSImage(contentsOf: source),
       let bitmap = NSBitmapImageRep(bitmapDataPlanes: nil, pixelsWide: 1024, pixelsHigh: 1024,
                                     bitsPerSample: 8, samplesPerPixel: 4, hasAlpha: true,
@@ -14,8 +16,11 @@ guard let image = NSImage(contentsOf: source),
 NSGraphicsContext.saveGraphicsState()
 NSGraphicsContext.current = context
 context.imageInterpolation = .high
-NSBezierPath(roundedRect: NSRect(x: 54, y: 82, width: 895, height: 879),
-             xRadius: 224, yRadius: 224).addClip()
-image.draw(in: NSRect(x: 0, y: 0, width: 1024, height: 1024))
+let tile = layout == "inset"
+    ? NSRect(x: 64, y: 64, width: 896, height: 896)
+    : NSRect(x: 54, y: 82, width: 895, height: 879)
+let cornerRadius: CGFloat = layout == "inset" ? 200 : 224
+NSBezierPath(roundedRect: tile, xRadius: cornerRadius, yRadius: cornerRadius).addClip()
+image.draw(in: layout == "inset" ? tile : NSRect(x: 0, y: 0, width: 1024, height: 1024))
 NSGraphicsContext.restoreGraphicsState()
 try bitmap.representation(using: .png, properties: [:])!.write(to: output)

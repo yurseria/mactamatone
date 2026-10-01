@@ -28,6 +28,7 @@ final class OtamatoneSynth {
             let targetMouth = AudioControlsGetMouth(controls)
             let targetEnvelope = AudioControlsGetGate(controls) != 0 ? 1.0 : 0.0
             let buffers = UnsafeMutableAudioBufferListPointer(audioBufferList)
+            var sumSquares = 0.0
 
             for frame in 0..<Int(frameCount) {
                 // The smoothing also prevents clicks when the lid jumps between
@@ -50,14 +51,24 @@ final class OtamatoneSynth {
                 let nasal = fundamental + second + third + fourth
                 let sample = Float(tanh(nasal * (0.7 + 0.35 * open)) * envelope * 0.22)
 
+                sumSquares += Double(sample) * Double(sample)
                 for buffer in buffers {
                     buffer.mData?.assumingMemoryBound(to: Float.self)[frame] = sample
                 }
+            }
+            if frameCount > 0 {
+                AudioControlsPublishOutputLevel(controls, sqrt(sumSquares / Double(frameCount)))
             }
             return noErr
         }
         engine.attach(source)
         engine.connect(source, to: engine.mainMixerNode, format: format)
+    }
+
+    var outputSample: AudioOutputSample {
+        let sequence = AudioControlsGetOutputSequence(controls)
+        let rms = started && engine.isRunning ? AudioControlsGetOutputLevel(controls) : 0
+        return AudioOutputSample(rms: rms, sequence: sequence)
     }
 
     func start() throws {
@@ -77,6 +88,22 @@ final class OtamatoneSynth {
         if started { engine.stop() }
         started = false
     }
+
+    #if THEME_CHECKS
+    // Exercise the actual render callback without sending sound to a device.
+    func startOfflineForChecks() throws {
+        try engine.enableManualRenderingMode(.offline, format: source.outputFormat(forBus: 0),
+                                             maximumFrameCount: 512)
+        try start()
+    }
+
+    func renderOfflineForChecks() throws -> [Float] {
+        let buffer = AVAudioPCMBuffer(pcmFormat: engine.manualRenderingFormat, frameCapacity: 512)!
+        let status = try engine.renderOffline(512, to: buffer)
+        precondition(status == .success, "Offline audio render failed")
+        return Array(UnsafeBufferPointer(start: buffer.floatChannelData![0], count: Int(buffer.frameLength)))
+    }
+    #endif
 
     deinit {
         engine.stop()

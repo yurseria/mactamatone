@@ -2,9 +2,10 @@
 set -euo pipefail
 cd "${0:A:h}/.."
 
-source="${1:-design/AppIcon/Music-source.png}"
+source="${1:-design/AppIcon/Otamatone-source.png}"
 output="${2:-Sources/Mactamatone/Resources/AppIcon.icns}"
-preview="${3:-design/AppIcon/Music.png}"
+preview="${3:-design/AppIcon/Otamatone.png}"
+layout="${4:-inset}"
 if [[ ! -f "$source" ]]; then
   echo "Missing icon artwork: $source" >&2
   exit 1
@@ -13,7 +14,7 @@ work=$(mktemp -d)
 trap 'rm -rf "$work"' EXIT
 iconset="$work/AppIcon.iconset"
 mkdir -p "$iconset"
-swift scripts/prepare-app-icon.swift "$source" "$work/Normalized.png"
+swift scripts/prepare-app-icon.swift "$source" "$work/Normalized.png" "$layout"
 source="$work/Normalized.png"
 mkdir -p "${output:h}" "${preview:h}"
 cp "$source" "$preview"

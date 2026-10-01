@@ -11,6 +11,7 @@ struct ThemeChecks {
         let app = NSApplication.shared
         app.setActivationPolicy(.prohibited)
         app.appearance = NSAppearance(named: .aqua)
+        try checkAudioMeter()
         let suite = "app.mactamatone.theme-checks.\(UUID().uuidString)"
         let preferences = UserDefaults(suiteName: suite)!
         defer { preferences.removePersistentDomain(forName: suite) }
@@ -33,6 +34,7 @@ struct ThemeChecks {
         }
         precondition(AppLanguage.english.text(.startPlaying) == "Start playing")
         precondition(AppLanguage.korean.text(.startPlaying) == "연주 시작")
+        checkPitchMapping(preferences: preferences)
         let model = InstrumentModel(preferences: preferences)
         precondition(model.language == .english)
         model.inputMode = .manual
@@ -72,7 +74,7 @@ struct ThemeChecks {
                 precondition(Art.stageImage(theme: theme, level: level).tiffRepresentation != nil)
             }
             for level in 0..<5 {
-                model.manualAngle = 55 + 90 * (Double(level) + 0.5) / 5
+                model.manualAngle = 25 + 105 * (Double(level) + 0.5) / 5
                 precondition(model.visualMouthLevel == level && model.pitchLevel == level)
             }
             model.manualAngle = 100
@@ -85,6 +87,35 @@ struct ThemeChecks {
                          to: previews.appendingPathComponent("\(theme.rawValue)-settings.png"))
             try snapshot(FloatingWidgetView(model: model, openSettings: {}, quit: {}).frame(width: 320, height: 476),
                          size: NSSize(width: 320, height: 476), to: previews.appendingPathComponent("\(theme.rawValue)-widget.png"))
+            model.isPlaying = true
+            // A play-button state alone cannot produce a glow.
+            precondition(model.audioActivity.level == 0)
+            for step in 0..<20 {
+                model.audioActivity.accept(AudioOutputSample(rms: 0.14, sequence: UInt64(step + 1)),
+                                           at: Double(step) / 30)
+            }
+            try snapshotSettings(model: model, size: NSSize(width: 962, height: 700),
+                                 to: previews.appendingPathComponent("\(theme.rawValue)-settings-glow.png"))
+            try snapshot(FloatingWidgetView(model: model, openSettings: {}, quit: {}),
+                         size: NSSize(width: 320, height: 476),
+                         to: previews.appendingPathComponent("\(theme.rawValue)-widget-glow.png"))
+            for (appearance, surface) in [("light", Color(red: 0.93, green: 0.94, blue: 0.96)),
+                                          ("dark", Color(red: 0.10, green: 0.12, blue: 0.15))] {
+                try snapshot(FloatingWidgetView(model: model, openSettings: {}, quit: {}).background(surface),
+                             size: NSSize(width: 320, height: 476),
+                             to: previews.appendingPathComponent("\(theme.rawValue)-widget-glow-\(appearance).png"))
+            }
+            if theme == .galaxy {
+                for (name, phase) in [("contracted", 1.5 * Double.pi), ("expanded", 0.5 * Double.pi)] {
+                    try snapshot(AudioGlowFrame(theme: theme, level: 1, breath: sin(phase))
+                        .frame(width: 320, height: 360)
+                        .background(Color(red: 0.10, green: 0.12, blue: 0.15)),
+                        size: NSSize(width: 320, height: 360),
+                        to: previews.appendingPathComponent("glow-motion-\(name).png"))
+                }
+            }
+            model.audioActivity.stop()
+            model.isPlaying = false
             if theme == .shiba {
                 try snapshotSettings(model: model, size: NSSize(width: 840, height: 620),
                              to: previews.appendingPathComponent("shiba-compact-settings.png"))
@@ -113,6 +144,88 @@ struct ThemeChecks {
             }
         }
         print("All six themes, automatic mouth animation, both languages, and dark-mode settings rendered.")
+    }
+
+    static func checkPitchMapping(preferences: UserDefaults) {
+        let model = InstrumentModel(preferences: preferences)
+        model.sensorConnected = true
+        for (angle, midi) in [(25.0, 48.0), (77.5, 66.0), (130.0, 84.0)] {
+            model.lidAngle = angle
+            precondition(model.safeToPlay)
+            precondition(abs(model.midiPitch - midi) < 0.000001)
+        }
+        model.lidAngle = 24.99
+        precondition(!model.safeToPlay && model.midiPitch == 48)
+        model.lidAngle = 25
+        precondition(model.safeToPlay && model.noteName == "C3" && model.pitchLevel == 0)
+        model.lidAngle = 26
+        precondition(model.midiPitch > 48, "Pitch must rise immediately above 25 degrees")
+        model.lidAngle = 129
+        precondition(model.normalizedPitch > 0.99 && model.noteName == "C6" && model.pitchLevel == 4)
+        model.lidAngle = 180
+        precondition(model.midiPitch == 84)
+        model.sensorConnected = false
+        precondition(!model.safeToPlay)
+        model.inputMode = .manual
+        precondition(model.safeToPlay)
+        model.manualAngle = 25
+        precondition(model.midiPitch == 48)
+        model.manualAngle = 130
+        precondition(model.midiPitch == 84)
+        precondition(InstrumentModel.pitchAngleRange == 25...130)
+        print("25–130 degree pitch mapping, mute boundary, 129 degree maximum, and manual input verified.")
+    }
+
+    static func checkAudioMeter() throws {
+        let synth = OtamatoneSynth()
+        precondition(synth.outputSample.rms == 0)
+        try synth.startOfflineForChecks()
+        _ = try synth.renderOfflineForChecks()
+        precondition(synth.outputSample.rms == 0, "Silent audio must not light the widget")
+        synth.set(frequency: 440, mouth: 0.5, playing: true)
+        var rendered = [Float]()
+        for _ in 0..<12 { rendered = try synth.renderOfflineForChecks() }
+        let measured = sqrt(rendered.reduce(0) { $0 + Double($1) * Double($1) } / Double(rendered.count))
+        let sample = synth.outputSample
+        precondition(sample.sequence > 0 && sample.rms > 0.03 && sample.rms < 0.22)
+        precondition(abs(sample.rms - measured) < 0.02, "Meter must match rendered PCM")
+        synth.set(frequency: 440, mouth: 0.5, playing: false)
+        for _ in 0..<30 { _ = try synth.renderOfflineForChecks() }
+        precondition(synth.outputSample.rms < 0.00001, "Meter must decay with the actual release tail")
+        synth.stop()
+        precondition(synth.outputSample.rms == 0)
+
+        var quietEnvelope = AudioLevelEnvelope()
+        var loudEnvelope = AudioLevelEnvelope()
+        for step in 1...30 {
+            let time = Double(step) / 30
+            let quiet = quietEnvelope.update(AudioOutputSample(rms: 0.001, sequence: UInt64(step)), at: time)
+            let loud = loudEnvelope.update(AudioOutputSample(rms: 0.2, sequence: UInt64(step)), at: time)
+            precondition(quiet == loud, "Glow strength must be independent of audio volume")
+        }
+        precondition(quietEnvelope.level > 0.99)
+
+        var envelope = AudioLevelEnvelope()
+        precondition(envelope.update(.silent, at: 0) == 0)
+        for step in 1...20 {
+            let level = envelope.update(AudioOutputSample(rms: 0.14, sequence: UInt64(step)), at: Double(step) / 30)
+            precondition(level > 0 && level <= 1)
+        }
+        precondition(envelope.level > 0.8)
+        let lit = envelope.level
+        for step in 21...90 {
+            _ = envelope.update(AudioOutputSample(rms: 0.14, sequence: 20), at: Double(step) / 30)
+        }
+        precondition(envelope.level == 0, "A stalled callback must fade a previously positive meter")
+        _ = envelope.update(AudioOutputSample(rms: 0.14, sequence: 21), at: 3.1)
+        precondition(envelope.level > 0 && envelope.level < lit)
+        for step in 22...90 {
+            _ = envelope.update(AudioOutputSample(rms: 0, sequence: UInt64(step)), at: 3.1 + Double(step - 21) / 30)
+        }
+        precondition(envelope.level == 0)
+        _ = envelope.update(AudioOutputSample(rms: .nan, sequence: 91), at: 6)
+        precondition(envelope.level == 0 && envelope.level.isFinite)
+        print("Rendered PCM metering, silent output, audio release, stalled callbacks, fixed glow strength, and smooth fades verified.")
     }
 
     static func snapshotSettings(model: InstrumentModel, size: NSSize,
