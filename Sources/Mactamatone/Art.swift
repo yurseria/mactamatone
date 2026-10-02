@@ -52,7 +52,7 @@ enum Art {
     }
 
     private static func load(_ name: String) -> NSImage {
-        guard let url = Bundle.module.url(forResource: name, withExtension: "png"),
+        guard let url = AppResources.bundle.url(forResource: name, withExtension: "png"),
               let image = NSImage(contentsOf: url) else {
             preconditionFailure("Missing bundled image: \(name)")
         }

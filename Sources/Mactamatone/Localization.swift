@@ -15,8 +15,8 @@ enum AppLanguage: String, CaseIterable, Identifiable {
     }
 
     private static let bundles: [Self: Bundle] = Dictionary(uniqueKeysWithValues: allCases.map {
-        ($0, Bundle.module.url(forResource: $0.rawValue, withExtension: "lproj")
-            .flatMap { Bundle(url: $0) } ?? Bundle.module)
+        ($0, AppResources.bundle.url(forResource: $0.rawValue, withExtension: "lproj")
+            .flatMap { Bundle(url: $0) } ?? AppResources.bundle)
     })
 
     func text(_ key: LocalizedText) -> String {

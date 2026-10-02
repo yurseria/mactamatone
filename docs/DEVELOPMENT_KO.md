@@ -46,6 +46,15 @@ open dist/Mactamatone.app
 - [테마](../design/Themes/README.md): 원본 이미지와 투명 악기 리소스 생성.
 - [배경](../design/Backgrounds/README.md): 별도 장면 리소스.
 
+실제 배포 앱 또는 DMG를 임시 설치 위치에서 확인합니다. 오디오나 창을 시작하지 않습니다.
+
+```sh
+./scripts/verify-packaged-app.sh
+./scripts/verify-packaged-app.sh dist/Mactamatone_VERSION_aarch64.dmg
+```
+
+패키지의 실행 파일로 아이콘, 두 언어, 모든 테마를 확인합니다. 릴리스 CI도 게시 전에 DMG를 검사합니다. 설치된 앱은 `Contents/Resources` 내부에서 리소스를 찾고, 개발 실행 파일은 SwiftPM 방식으로 찾습니다.
+
 ## 릴리스
 
 `Info.plist`의 `CFBundleShortVersionString`과 `CFBundleVersion`을 변경합니다. 푸시하는 `vX.Y.Z` 태그는 short version 값과 일치해야 합니다. 릴리스 워크플로는 Apple Silicon DMG를 빌드해 [GitHub Releases](https://github.com/yurseria/mactamatone/releases)에 게시합니다.

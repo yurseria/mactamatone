@@ -118,6 +118,11 @@ final class InstrumentModel: ObservableObject {
 struct MactamatoneApp {
     static func main() {
         let app = NSApplication.shared
+        if CommandLine.arguments.contains("--verify-bundled-resources") {
+            app.setActivationPolicy(.prohibited)
+            AppResources.verifyPackagedResources()
+            return
+        }
         app.setActivationPolicy(.regular)
         let delegate = MactamatoneDelegate()
         app.delegate = delegate
@@ -134,7 +139,7 @@ private final class MactamatoneDelegate: NSObject, NSApplicationDelegate, NSWind
     private var languageSubscription: AnyCancellable?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
-        if let url = Bundle.module.url(forResource: "AppIcon", withExtension: "icns"),
+        if let url = AppResources.bundle.url(forResource: "AppIcon", withExtension: "icns"),
            let icon = NSImage(contentsOf: url) {
             NSApp.applicationIconImage = icon
         }

@@ -46,6 +46,15 @@ It first attempts native window screenshots with `screencapture`. If screen capt
 - [Themes](../design/Themes/README.md): source artwork and cutout generation.
 - [Backgrounds](../design/Backgrounds/README.md): separate scene assets.
 
+Verify the actual production app or DMG in a temporary installation, without starting audio or windows:
+
+```sh
+./scripts/verify-packaged-app.sh
+./scripts/verify-packaged-app.sh dist/Mactamatone_VERSION_aarch64.dmg
+```
+
+This checks the app icon, both languages, and every theme using the packaged executable. Release CI runs the DMG check before publication. Packaged apps resolve resources inside `Contents/Resources`; development executables retain SwiftPM resource lookup.
+
 ## Releases
 
 Set `CFBundleShortVersionString` and `CFBundleVersion` in `Info.plist`. A pushed `vX.Y.Z` tag must match the short version string. The release workflow builds an Apple Silicon DMG and publishes it to [GitHub Releases](https://github.com/yurseria/mactamatone/releases).

@@ -28,6 +28,12 @@ jobs:
         shell: bash
         run: ./scripts/package-dmg.sh
 
+      - name: Verify resources in the packaged DMG
+        shell: bash
+        run: |
+          version=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' Info.plist)
+          ./scripts/verify-packaged-app.sh "dist/Mactamatone_${version}_aarch64.dmg"
+
       - name: Sign update and generate appcast
         shell: bash
         env:
