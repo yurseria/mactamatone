@@ -39,3 +39,16 @@
 "sensorDisconnected" = "Sensor signal lost. Use manual mode.";
 "sensorReconnected" = "Lid-angle sensor reconnected";
 "audioStartFailed" = "Unable to start audio output: %@";
+
+"versionLabel" = "Version %@ (%@)";
+"updates" = "Updates";
+"checkForUpdates" = "Check for updates";
+"checkingUpdates" = "Checking…";
+"updateAvailable" = "Version %@ is available.";
+"upToDate" = "You’re up to date.";
+"installUpdate" = "Update and restart";
+"installingUpdate" = "Updating…";
+"updateCheckFailed" = "Could not check for updates. Try again.";
+"updateInstallFailed" = "Update could not be completed. Try again or download the release.";
+"viewRelease" = "Release details";
+"updateDevelopment" = "Install the app bundle to update it.";

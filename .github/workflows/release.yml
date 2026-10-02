@@ -28,11 +28,22 @@ jobs:
         shell: bash
         run: ./scripts/package-dmg.sh
 
+      - name: Sign update and generate appcast
+        shell: bash
+        env:
+          SPARKLE_PRIVATE_KEY: ${{ secrets.SPARKLE_PRIVATE_KEY }}
+        run: |
+          if [[ -z "$SPARKLE_PRIVATE_KEY" ]]; then
+            echo 'SPARKLE_PRIVATE_KEY is required to publish signed updates.' >&2
+            exit 1
+          fi
+          ./scripts/generate-update-feed.sh
+
       - name: Publish GitHub Release
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           version=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' Info.plist)
-          gh release create "$GITHUB_REF_NAME" "dist/Mactamatone_${version}_aarch64.dmg" \
+          gh release create "$GITHUB_REF_NAME" "dist/Mactamatone_${version}_aarch64.dmg" "dist/appcast.xml" \
             --title "Mactamatone $version" --generate-notes --verify-tag

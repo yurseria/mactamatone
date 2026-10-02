@@ -40,6 +40,7 @@ The widget stays available when you close settings. On macOS 26 and later, its b
 - Choose **Classic, Pink, Black Cat, Yellow Chick, Galaxy, or Shiba Inu**. Each theme has its own scene and playback halo.
 - Switch between **lid-angle input** and **manual play**. Manual play is also available when the lid sensor is unavailable.
 - Adjust **Mouth timbre** to change the character of the sound.
+- See the current version, **check for updates**, and install a new version with **Update and restart**.
 - Choose **English** or **한국어**. English is the default; your language and theme are saved for the next launch.
 
 The screenshots show the Galaxy theme in manual play. Enable macOS **Reduce Motion** to keep the halo still.

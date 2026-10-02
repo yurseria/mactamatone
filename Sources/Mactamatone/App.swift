@@ -35,6 +35,7 @@ final class InstrumentModel: ObservableObject {
     var statusMessage: String { sensorStatus.text(in: language) }
     var audioError: String? { audioErrorDetail.map { language.format(.audioStartFailed, $0) } }
 
+    let updater = AppUpdater()
     let audioActivity = AudioActivity()
     private let sensor = LidSensor()
     private let synth = OtamatoneSynth()
@@ -473,6 +474,48 @@ private struct WidgetArtView: NSViewRepresentable {
     }
 }
 
+/// A native selection menu with a trailing value and no enclosing box.
+private struct SettingsSelectionRow<Selection: Hashable>: View {
+    let title: String
+    @Binding var selection: Selection
+    let options: [Selection]
+    let optionTitle: (Selection) -> String
+
+    var body: some View {
+        HStack(spacing: 8) {
+            Text(title)
+            Spacer(minLength: 8)
+            Menu {
+                Picker(title, selection: $selection) {
+                    ForEach(options, id: \.self) { option in
+                        Text(optionTitle(option)).tag(option)
+                    }
+                }
+                .labelsHidden()
+            } label: {
+                HStack(spacing: 8) {
+                    Text(optionTitle(selection))
+                        .lineLimit(1)
+                    Image(systemName: "chevron.up.chevron.down")
+                        .font(.system(size: 9, weight: .semibold))
+                        .frame(width: 23, height: 23)
+                        .background(Palette.ink.opacity(0.07), in: Circle())
+                }
+                .foregroundStyle(Palette.ink)
+                .contentShape(Rectangle())
+            }
+            .menuStyle(.button)
+            .buttonStyle(.plain)
+            .menuIndicator(.hidden)
+            .fixedSize()
+            .accessibilityLabel(title)
+            .accessibilityValue(optionTitle(selection))
+        }
+        .font(.system(size: 12, weight: .semibold))
+        .frame(maxWidth: .infinity)
+    }
+}
+
 struct SettingsView: View {
     @ObservedObject var model: InstrumentModel
 
@@ -492,128 +535,135 @@ struct SettingsView: View {
     }
 
     private var controlPanel: some View {
-        ScrollView(.vertical) {
-            VStack(alignment: .leading, spacing: 0) {
-                Text("Otamatone")
-                    .font(.system(size: 30, weight: .black, design: .rounded))
-                    .tracking(-1.5)
-                Text(model.language.text(.instrumentSubtitle))
-                    .font(.system(size: 10, weight: .bold, design: .rounded))
-                    .tracking(3)
-                    .foregroundStyle(Palette.muted)
-                    .padding(.top, 2)
-                Text(model.language.text(.playInstruction))
-                    .font(.system(size: 14, weight: .medium))
-                    .foregroundStyle(Palette.muted)
-                    .padding(.top, 17)
+        VStack(alignment: .leading, spacing: 14) {
+            ScrollView(.vertical) {
+                VStack(alignment: .leading, spacing: 0) {
+                    Text("Otamatone")
+                        .font(.system(size: 30, weight: .black, design: .rounded))
+                        .tracking(-1.5)
+                    Text(model.language.format(.versionLabel, model.updater.current.version, model.updater.current.build))
+                        .font(.system(size: 10, weight: .medium, design: .monospaced))
+                        .foregroundStyle(Palette.muted)
+                        .padding(.top, 3)
+                    Text(model.language.text(.instrumentSubtitle))
+                        .font(.system(size: 10, weight: .bold, design: .rounded))
+                        .tracking(3)
+                        .foregroundStyle(Palette.muted)
+                        .padding(.top, 2)
+                    Text(model.language.text(.playInstruction))
+                        .font(.system(size: 14, weight: .medium))
+                        .foregroundStyle(Palette.muted)
+                        .padding(.top, 12)
 
-                Picker(model.language.text(.language), selection: $model.language) {
-                    ForEach(AppLanguage.allCases) { language in
-                        Text(language.title).tag(language)
+                    SettingsSelectionRow(
+                        title: model.language.text(.language),
+                        selection: $model.language,
+                        options: AppLanguage.allCases,
+                        optionTitle: { $0.title }
+                    )
+                    .padding(.top, 14)
+
+                    themePicker
+                        .padding(.top, 12)
+
+                    Spacer(minLength: 16)
+
+                    Button(action: model.togglePlay) {
+                        HStack(spacing: 14) {
+                            Image(systemName: model.isPlaying ? "stop.fill" : "play.fill")
+                                .font(.system(size: 20, weight: .bold))
+                                .frame(width: 54, height: 54)
+                                .background(model.safeToPlay ? Palette.ink : Palette.line,
+                                            in: RoundedRectangle(cornerRadius: 17))
+                                .foregroundStyle(.white)
+                            VStack(alignment: .leading, spacing: 3) {
+                                Text(model.language.text(model.isPlaying ? .stopPlaying : .startPlaying))
+                                    .font(.system(size: 16, weight: .bold, design: .rounded))
+                                Text(model.language.text(!model.safeToPlay ? .openLid : model.inputMode == .manual ? .adjustPitch : .moveLidSlowly))
+                                    .font(.system(size: 11, weight: .medium))
+                                    .foregroundStyle(Palette.muted)
+                            }
+                            Spacer(minLength: 0)
+                        }
+                        .contentShape(Rectangle())
                     }
-                }
-                .font(.system(size: 12, weight: .semibold))
-                .pickerStyle(.menu)
-                .padding(.top, 22)
+                    .buttonStyle(.plain)
+                    .disabled(!model.safeToPlay && !model.isPlaying)
+                    .accessibilityHint(model.language.text(.playHint))
 
-                themePicker
-                    .padding(.top, 12)
+                    Rectangle().fill(Palette.line.opacity(0.55)).frame(height: 1).padding(.vertical, 16)
 
-                Spacer(minLength: 16)
+                    Text(model.language.text(.inputMode))
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundStyle(Palette.muted)
+                    HStack(spacing: 6) {
+                        ForEach(InputMode.allCases) { mode in
+                            Button { model.inputMode = mode } label: {
+                                Text(mode.title(in: model.language))
+                                    .font(.system(size: 12, weight: .semibold))
+                                    .frame(maxWidth: .infinity)
+                                    .padding(.vertical, 10)
+                                    .foregroundStyle(model.inputMode == mode ? .white : Palette.ink)
+                                    .background(model.inputMode == mode ? Palette.ink : .white.opacity(0.55),
+                                                in: RoundedRectangle(cornerRadius: 10))
+                            }
+                            .buttonStyle(.plain)
+                        }
+                    }
+                    .padding(.top, 10)
 
-                Button(action: model.togglePlay) {
-                    HStack(spacing: 14) {
-                        Image(systemName: model.isPlaying ? "stop.fill" : "play.fill")
-                            .font(.system(size: 20, weight: .bold))
-                            .frame(width: 54, height: 54)
-                            .background(model.safeToPlay ? Palette.ink : Palette.line,
-                                        in: RoundedRectangle(cornerRadius: 17))
-                            .foregroundStyle(.white)
-                        VStack(alignment: .leading, spacing: 3) {
-                            Text(model.language.text(model.isPlaying ? .stopPlaying : .startPlaying))
-                                .font(.system(size: 16, weight: .bold, design: .rounded))
-                            Text(model.language.text(!model.safeToPlay ? .openLid : model.inputMode == .manual ? .adjustPitch : .moveLidSlowly))
-                                .font(.system(size: 11, weight: .medium))
+                    if model.inputMode == .manual {
+                        VStack(alignment: .leading, spacing: 7) {
+                            Text(model.language.text(.pitch))
+                                .font(.system(size: 12, weight: .semibold))
+                            ValueTrack(value: $model.manualAngle, range: InstrumentModel.pitchAngleRange, label: model.language.text(.pitch), accent: model.theme.accent)
+                        }
+                        .padding(.top, 14)
+                    } else {
+                        Text(model.lidAngle < 25 && model.sensorConnected
+                             ? model.language.text(.openLidMore)
+                             : model.statusMessage)
+                            .font(.system(size: 12, weight: .medium))
+                            .foregroundStyle(Palette.muted)
+                            .fixedSize(horizontal: false, vertical: true)
+                            .padding(.top, 18)
+                    }
+
+                    VStack(alignment: .leading, spacing: 7) {
+                        HStack {
+                            Text(model.language.text(.mouthTimbre))
+                                .font(.system(size: 12, weight: .semibold))
+                            Spacer()
+                            Text("\(Int(model.mouth * 100))%")
+                                .font(.system(size: 11, design: .monospaced))
                                 .foregroundStyle(Palette.muted)
                         }
-                        Spacer(minLength: 0)
+                        ValueTrack(value: $model.mouth, range: 0.1...1, label: model.language.text(.mouthTimbre), accent: model.theme.accent)
                     }
-                    .contentShape(Rectangle())
-                }
-                .buttonStyle(.plain)
-                .disabled(!model.safeToPlay && !model.isPlaying)
-                .accessibilityHint(model.language.text(.playHint))
+                    .padding(.top, 14)
 
-                Rectangle().fill(Palette.line.opacity(0.55)).frame(height: 1).padding(.vertical, 25)
+                    Spacer(minLength: 12)
 
-                Text(model.language.text(.inputMode))
-                    .font(.system(size: 12, weight: .semibold))
-                    .foregroundStyle(Palette.muted)
-                HStack(spacing: 6) {
-                    ForEach(InputMode.allCases) { mode in
-                        Button { model.inputMode = mode } label: {
-                            Text(mode.title(in: model.language))
-                                .font(.system(size: 12, weight: .semibold))
-                                .frame(maxWidth: .infinity)
-                                .padding(.vertical, 10)
-                                .foregroundStyle(model.inputMode == mode ? .white : Palette.ink)
-                                .background(model.inputMode == mode ? Palette.ink : .white.opacity(0.55),
-                                            in: RoundedRectangle(cornerRadius: 10))
-                        }
-                        .buttonStyle(.plain)
-                    }
-                }
-                .padding(.top, 10)
-
-                if model.inputMode == .manual {
-                    VStack(alignment: .leading, spacing: 7) {
-                        Text(model.language.text(.pitch))
-                            .font(.system(size: 12, weight: .semibold))
-                        ValueTrack(value: $model.manualAngle, range: InstrumentModel.pitchAngleRange, label: model.language.text(.pitch), accent: model.theme.accent)
-                    }
-                    .padding(.top, 22)
-                } else {
-                    Text(model.lidAngle < 25 && model.sensorConnected
-                         ? model.language.text(.openLidMore)
-                         : model.statusMessage)
-                        .font(.system(size: 12, weight: .medium))
-                        .foregroundStyle(Palette.muted)
-                        .fixedSize(horizontal: false, vertical: true)
-                        .padding(.top, 18)
-                }
-
-                VStack(alignment: .leading, spacing: 7) {
-                    HStack {
-                        Text(model.language.text(.mouthTimbre))
-                            .font(.system(size: 12, weight: .semibold))
-                        Spacer()
-                        Text("\(Int(model.mouth * 100))%")
-                            .font(.system(size: 11, design: .monospaced))
+                    HStack(spacing: 7) {
+                        Circle()
+                            .fill(model.sensorConnected ? model.theme.accent : Palette.muted)
+                            .frame(width: 8, height: 8)
+                        Text(model.language.text(model.sensorConnected ? .sensorConnected : .manualAvailable))
+                            .font(.system(size: 11, weight: .semibold))
                             .foregroundStyle(Palette.muted)
                     }
-                    ValueTrack(value: $model.mouth, range: 0.1...1, label: model.language.text(.mouthTimbre), accent: model.theme.accent)
-                }
-                .padding(.top, 22)
-
-                Spacer(minLength: 28)
-
-                HStack(spacing: 7) {
-                    Circle()
-                        .fill(model.sensorConnected ? model.theme.accent : Palette.muted)
-                        .frame(width: 8, height: 8)
-                    Text(model.language.text(model.sensorConnected ? .sensorConnected : .manualAvailable))
-                        .font(.system(size: 11, weight: .semibold))
-                        .foregroundStyle(Palette.muted)
-                }
-                if let error = model.audioError {
-                    Text(error)
-                        .font(.system(size: 11))
-                        .foregroundStyle(.red)
-                        .padding(.top, 8)
+                    if let error = model.audioError {
+                        Text(error)
+                            .font(.system(size: 11))
+                            .foregroundStyle(.red)
+                            .padding(.top, 8)
+                    }
                 }
             }
+            .scrollIndicators(.hidden)
+            UpdatePanel(updater: model.updater, language: model.language, accent: model.theme.accent)
+                .frame(maxWidth: .infinity, alignment: .leading)
         }
-        .scrollIndicators(.hidden)
         .padding(23)
         .frame(maxHeight: .infinity, alignment: .topLeading)
         .background(.white.opacity(0.40), in: RoundedRectangle(cornerRadius: 26))
@@ -623,13 +673,12 @@ struct SettingsView: View {
 
     private var themePicker: some View {
         VStack(alignment: .leading, spacing: 10) {
-            Picker(model.language.text(.theme), selection: $model.theme) {
-                ForEach(InstrumentTheme.allCases) { theme in
-                    Text(theme.title(in: model.language)).tag(theme)
-                }
-            }
-            .font(.system(size: 12, weight: .semibold))
-            .pickerStyle(.menu)
+            SettingsSelectionRow(
+                title: model.language.text(.theme),
+                selection: $model.theme,
+                options: InstrumentTheme.allCases,
+                optionTitle: { $0.title(in: model.language) }
+            )
 
             HStack(spacing: 4) {
                 ForEach(InstrumentTheme.allCases) { theme in

@@ -25,6 +25,7 @@ Build the app first, then run:
 
 ```sh
 ./scripts/verify-themes.sh
+./scripts/verify-updates.sh
 ```
 
 The native checks cover language persistence and translations, six themes and five mouth positions, light settings controls under Dark Mode, the 25°–130° pitch range, the mute boundary, offline audio metering, and playback glow behavior. UI previews are written to `dist/theme-previews/`. Audio checks use offline rendering without playing through the speakers.
@@ -56,3 +57,7 @@ To package a DMG locally:
 ```
 
 The [Homebrew tap](https://github.com/yurseria/homebrew-tap) checks stable releases and updates the cask version and checksum automatically.
+
+## In-app updates
+
+See [Update distribution](UPDATES.md) for installation routing, Sparkle signing keys, and the release feed. To generate a feed locally, package a DMG and run `./scripts/generate-update-feed.sh`. Private signing keys are kept in Keychain and must never be committed.

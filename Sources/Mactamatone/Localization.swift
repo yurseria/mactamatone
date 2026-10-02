@@ -69,6 +69,8 @@ enum LocalizedText: String, CaseIterable {
     case sensorUnavailable
     case sensorDisconnected
     case sensorReconnected
+    case versionLabel, updates, checkForUpdates, checkingUpdates, updateAvailable, upToDate
+    case installUpdate, installingUpdate, updateCheckFailed, updateInstallFailed, viewRelease, updateDevelopment
     case audioStartFailed
 }
 

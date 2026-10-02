@@ -39,3 +39,16 @@
 "sensorDisconnected" = "센서 신호가 끊겼습니다. 수동 조절을 사용하세요";
 "sensorReconnected" = "화면 각도 센서 다시 연결됨";
 "audioStartFailed" = "오디오 출력 장치를 시작할 수 없습니다: %@";
+
+"versionLabel" = "버전 %@ (%@)";
+"updates" = "업데이트";
+"checkForUpdates" = "업데이트 확인";
+"checkingUpdates" = "확인 중…";
+"updateAvailable" = "새 버전 %@을 사용할 수 있습니다.";
+"upToDate" = "최신 버전입니다.";
+"installUpdate" = "업데이트 및 재시작";
+"installingUpdate" = "업데이트 중…";
+"updateCheckFailed" = "업데이트를 확인하지 못했습니다. 다시 시도하세요.";
+"updateInstallFailed" = "업데이트를 완료하지 못했습니다. 다시 시도하거나 릴리스를 다운로드하세요.";
+"viewRelease" = "릴리스 보기";
+"updateDevelopment" = "앱 번들로 설치한 뒤 업데이트할 수 있습니다.";

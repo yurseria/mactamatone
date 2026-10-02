@@ -25,6 +25,7 @@ open dist/Mactamatone.app
 
 ```sh
 ./scripts/verify-themes.sh
+./scripts/verify-updates.sh
 ```
 
 언어 저장과 번역, 여섯 테마와 다섯 입 모양, 다크 모드에서 설정창 컨트롤 색상, 25°~130° 음역 매핑과 음소거 경계, 오프라인 오디오 측정과 후광 동작을 검증합니다. UI 미리보기는 `dist/theme-previews/`에 저장합니다. 오디오 검증은 스피커 출력 없이 오프라인으로 실행합니다.
@@ -56,3 +57,7 @@ open dist/Mactamatone.app
 ```
 
 [Homebrew tap](https://github.com/yurseria/homebrew-tap)은 정식 릴리스를 확인하고 Cask 버전과 체크섬을 자동으로 갱신합니다.
+
+## 앱 내 업데이트
+
+업데이트의 설치 방식 구분, Sparkle 서명 키와 릴리스 피드는 [업데이트 배포](UPDATES_KO.md)에 설명돼 있습니다. 로컬에서 업데이트 피드를 생성하려면 DMG를 패키징한 뒤 `./scripts/generate-update-feed.sh`를 실행합니다. 서명 개인키는 Keychain에 보관하고 저장소에 포함하지 않습니다.
